@@ -10,6 +10,7 @@ import {
   Heading,
   Merge,
   Pencil,
+  PenTool,
   Rows2,
   Split,
   Trash2,
@@ -93,6 +94,26 @@ export function LinkBubble({ editor, onEdit }: { editor: Editor; onEdit: () => v
       </B>
       <B title="Remove link" onClick={() => editor.chain().focus().extendMarkRange('link').unsetLink().run()}>
         <Unlink size={15} />
+      </B>
+    </BubbleMenu>
+  );
+}
+
+export function DrawingBubble({ editor, onEdit }: { editor: Editor; onEdit: () => void }) {
+  return (
+    <BubbleMenu
+      editor={editor}
+      pluginKey="drawingBubble"
+      shouldShow={({ editor: e }) => e.isEditable && e.isActive('drawing')}
+      options={{ placement: 'top', offset: 8 }}
+      className="bubble"
+    >
+      <button className="bubble-text-btn" onMouseDown={(e) => e.preventDefault()} onClick={onEdit}>
+        <PenTool size={15} /> Edit drawing
+      </button>
+      <span className="bubble-sep" />
+      <B title="Delete drawing" danger onClick={() => editor.chain().focus().deleteSelection().run()}>
+        <Trash2 size={16} />
       </B>
     </BubbleMenu>
   );

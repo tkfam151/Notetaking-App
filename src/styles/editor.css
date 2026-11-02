@@ -364,3 +364,8 @@
     break-after: avoid;
   }
 }
+
+/* Drawings: double-click to edit */
+.doc-content img[data-drawing] {
+  cursor: default;
+}

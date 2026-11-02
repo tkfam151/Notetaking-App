@@ -9,6 +9,7 @@ import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
 import { PageBreak } from './PageBreak';
+import { Drawing } from './Drawing';
 import { CommentMark } from './CommentMark';
 import { SearchReplace } from './SearchReplace';
 
@@ -22,6 +23,10 @@ export function buildExtensions() {
     TextAlign.configure({ types: ['heading', 'paragraph'] }),
     Highlight.configure({ multicolor: true }),
     Image.configure({
+      allowBase64: true,
+      resize: { enabled: true, minWidth: 40, minHeight: 40, alwaysPreserveAspectRatio: true },
+    }),
+    Drawing.configure({
       allowBase64: true,
       resize: { enabled: true, minWidth: 40, minHeight: 40, alwaysPreserveAspectRatio: true },
     }),

@@ -117,6 +117,12 @@ Open **[tkfam151.github.io/notetaking-app](https://tkfam151.github.io/notetaking
 - Special characters, and the date or time inserted with one click
 - Markdown-style shortcuts: type `# ` for a heading, `- ` for a list, `[ ] ` for a checklist, `> ` for a quote
 
+**Drawing** (like Pages and Word's Draw tab)
+- Click **Draw** on the toolbar (or **Insert → Drawing…**) to sketch with a mouse, finger or stylus. Apple Pencil and other pressure-sensitive pens draw thicker when you press harder
+- Pen, highlighter, eraser, lines, arrows, rectangles and ellipses (filled or outlined), 9 colours plus a custom colour, 4 brush sizes, undo and redo
+- White, grid or transparent background. Hold **Shift** for straight lines, squares and circles
+- Drawings sit in the document like images: resize them, and they export to Word and PDF. **Double-click** a drawing to keep editing it
+
 **Page layout** (like Word and Pages)
 - Page view with Letter, A4 or Legal paper, portrait or landscape, and custom margins
 - A draggable ruler for the left and right margins, page boundary markers, and zoom from 50% to 200%

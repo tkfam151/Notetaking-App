@@ -27,7 +27,10 @@ import { CommentsPanel } from './CommentsPanel';
 import { HistoryPanel } from './HistoryPanel';
 import { FindBar } from './FindBar';
 import { PageSetupDialog, ShortcutsDialog, SpecialCharsDialog, WordCountDialog } from './Dialogs';
-import { LinkBubble, TableBubble } from './Bubbles';
+import { DrawingBubble, LinkBubble, TableBubble } from './Bubbles';
+import { DrawingDialog, type DrawingResult } from './DrawingDialog';
+import { parseDrawing, type DrawingData } from '../editor/Drawing';
+import { NodeSelection } from '@tiptap/pm/state';
 import { Ruler } from './Ruler';
 import { SettingsDialog } from './SettingsDialog';
 
@@ -133,6 +136,8 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
   const [preview, setPreview] = useState<DocVersion | null>(null);
   const [historyKey, setHistoryKey] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
+  /** Open drawing editor: pos is set when editing an existing drawing */
+  const [drawing, setDrawing] = useState<null | { pos: number | null; data: DrawingData | null }>(null);
   const [menubarActive, setMenubarActive] = useState<string | null>(null);
   const menubar: MenubarState = { active: menubarActive, setActive: setMenubarActive };
 
@@ -204,6 +209,11 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
+      handleDoubleClickOn: (view, pos, node) => {
+        if (node.type.name !== 'drawing' || !view.editable) return false;
+        setDrawing({ pos, data: parseDrawing(node.attrs.drawing) });
+        return true;
+      },
       attributes: { class: 'doc-content', spellcheck: String(settings.spellcheck), 'aria-label': 'Document' },
       handlePaste: (_view, event) => {
         const files = Array.from(event.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'));
@@ -314,6 +324,38 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
     const f = await pickFile('image/*');
     if (f) insertImageFiles([f]);
   }, [insertImageFiles]);
+
+  const openDrawing = useCallback(() => {
+    const sel = editor.state.selection;
+    if (sel instanceof NodeSelection && sel.node.type.name === 'drawing') {
+      setDrawing({ pos: sel.from, data: parseDrawing(sel.node.attrs.drawing) });
+    } else {
+      setDrawing({ pos: null, data: null });
+    }
+  }, [editor]);
+
+  const saveDrawing = useCallback(
+    (r: DrawingResult) => {
+      const attrs = { src: r.src, width: r.width, height: r.height, alt: 'Drawing', drawing: JSON.stringify(r.data) };
+      const pos = drawing?.pos;
+      if (pos != null && editor.state.doc.nodeAt(pos)?.type.name === 'drawing') {
+        // Replace the node so the resizable view picks up the new size.
+        const old = editor.state.doc.nodeAt(pos)!;
+        editor
+          .chain()
+          .focus()
+          .command(({ tr }) => {
+            tr.replaceWith(pos, pos + old.nodeSize, editor.schema.nodes.drawing.create(attrs));
+            return true;
+          })
+          .run();
+      } else {
+        editor.chain().focus().insertContent({ type: 'drawing', attrs }).run();
+      }
+      setDrawing(null);
+    },
+    [editor, drawing],
+  );
 
   const editLink = useCallback(async () => {
     const prev = editor.getAttributes('link').href as string | undefined;
@@ -585,6 +627,7 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
       label: 'Insert',
       items: () => [
         { label: 'Image…', onClick: insertImage },
+        { label: 'Drawing…', onClick: openDrawing },
         {
           label: 'Table',
           submenu: [
@@ -789,7 +832,7 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
       ) : (
         <Toolbar
           editor={editor}
-          actions={{ print, insertImage, editLink, addComment, zoom, setZoom }}
+          actions={{ print, insertImage, editLink, addComment, draw: openDrawing, zoom, setZoom }}
         />
       )}
 
@@ -866,6 +909,8 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
 
       {!preview && <TableBubble editor={editor} />}
       {!preview && <LinkBubble editor={editor} onEdit={editLink} />}
+      {!preview && <DrawingBubble editor={editor} onEdit={openDrawing} />}
+      {drawing && <DrawingDialog initial={drawing.data} onSave={saveDrawing} onClose={() => setDrawing(null)} />}
 
       {dialog === 'pageSetup' && <PageSetupDialog value={pageSetup} onSave={setPageSetup} onClose={() => setDialog(null)} />}
       {dialog === 'wordCount' && <WordCountDialog editor={editor} onClose={() => setDialog(null)} />}

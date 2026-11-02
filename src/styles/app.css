@@ -1704,3 +1704,147 @@ button.version-row {
     max-width: calc(100vw - 16px);
   }
 }
+
+/* ---- Drawing ------------------------------------------------------------- */
+
+.draw-dialog {
+  width: min(1040px, 100%);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: pop 0.15s ease-out;
+}
+.draw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 8px 20px;
+}
+.draw-header h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.draw-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 12px;
+  padding: 4px 8px;
+  border-radius: 14px;
+  background: var(--bg-hover);
+}
+.draw-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.draw-swatch {
+  width: 24px;
+  height: 24px;
+  margin: 0 2px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-elev);
+  box-shadow: 0 0 0 1px var(--border-strong);
+  padding: 0;
+  flex: 0 0 auto;
+}
+.draw-swatch.active {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.draw-swatch.custom {
+  position: relative;
+  overflow: hidden;
+  background: conic-gradient(#e03131, #f08c00, #fab005, #2f9e44, #1971c2, #6741d9, #c2255c, #e03131);
+  cursor: pointer;
+}
+.draw-swatch.custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.size-dot {
+  display: inline-block;
+  border-radius: 50%;
+  background: currentColor;
+}
+.draw-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: var(--canvas);
+  margin: 10px 12px 0;
+  border-radius: 10px;
+}
+.draw-canvas {
+  width: 100%;
+  max-height: calc(100vh - 220px);
+  aspect-ratio: 960 / 600;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: var(--shadow-sm);
+  touch-action: none;
+  cursor: crosshair;
+  max-width: calc((100vh - 220px) * 1.6);
+}
+.draw-canvas.tool-eraser {
+  cursor: cell;
+}
+.draw-hint {
+  margin: 8px 20px 12px;
+}
+.bubble-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.bubble-text-btn:hover {
+  background: var(--bg-hover);
+}
+
+@media (max-width: 860px) {
+  .draw-backdrop {
+    padding: 0;
+  }
+  .draw-dialog {
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .draw-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .draw-stage {
+    padding: 6px;
+    margin: 8px 8px 0;
+  }
+  .draw-canvas {
+    max-height: none;
+    max-width: none;
+  }
+  .draw-hint {
+    display: none;
+  }
+}
