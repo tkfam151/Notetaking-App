@@ -1,0 +1,14 @@
+node_modules/
+dist/
+release/
+*.log
+.DS_Store
+# Native build outputs
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+ios/App/build/
+ios/App/Pods/
+ios/DerivedData/
+*.tsbuildinfo

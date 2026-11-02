@@ -1,0 +1,149 @@
+# Builds Inkwell for every platform.
+#  - Push a tag like `v1.0.0` to build everything and publish a GitHub Release with the installers attached.
+#  - Or run it by hand from the Actions tab ("Run workflow") to just get the build artifacts.
+name: Build & Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    name: Desktop (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS, os: macos-latest, script: dist:mac, files: 'release/*.dmg' }
+          - { name: Windows, os: windows-latest, script: dist:win, files: 'release/*.exe' }
+          - { name: Linux, os: ubuntu-latest, script: dist:linux, files: "release/*.AppImage\nrelease/*.deb" }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run ${{ matrix.script }}
+        env:
+          # No paid code-signing certificate: build unsigned (see README for how to open it).
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkwell-${{ matrix.name }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+  android:
+    name: Android (APK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync android
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Rename APK
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p out
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/Inkwell-${VERSION}-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkwell-Android
+          path: out/*.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS (unsigned IPA)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync ios
+      - name: Build unsigned app
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package IPA
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p out/Payload
+          cp -R ios/build/Build/Products/Release-iphoneos/App.app out/Payload/
+          (cd out && zip -qry "Inkwell-${VERSION}-ios-unsigned.ipa" Payload && rm -rf Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkwell-iOS
+          path: out/*.ipa
+          if-no-files-found: error
+
+  web:
+    name: Web app (zip)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p out && (cd dist && zip -qr "../out/Inkwell-${VERSION}-web.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkwell-Web
+          path: out/*.zip
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [desktop, android, ios, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - run: ls -la artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          body: |
+            ## Download Inkwell
+            | Platform | File |
+            |---|---|
+            | **macOS** (Intel & Apple Silicon) | `Inkwell-*-mac.dmg` |
+            | **Windows** 10/11 | `Inkwell-*-windows-setup.exe` |
+            | **Linux** | `.AppImage` or `.deb` |
+            | **Android** | `Inkwell-*-android.apk` |
+            | **iPhone / iPad** | Use the web app (Add to Home Screen), or sideload `Inkwell-*-ios-unsigned.ipa` |
+
+            See the [README](../../#readme) for step-by-step install instructions.

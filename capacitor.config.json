@@ -1,0 +1,6 @@
+{
+  "appId": "app.inkwell.editor",
+  "appName": "Inkwell",
+  "webDir": "dist",
+  "backgroundColor": "#f4f5f7"
+}
