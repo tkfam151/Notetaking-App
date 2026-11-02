@@ -50,6 +50,12 @@ All installers are on the **[Releases page](https://github.com/tkfam151/notetaki
      ```bash
      xattr -cr /Applications/Inkwell.app
      ```
+   - If it still won't open (common on Apple Silicon Macs), this copies the app into your
+     user Applications folder without the download quarantine, re-signs it locally and opens it:
+     ```bash
+     pkill -9 -f "Inkwell"; mkdir -p ~/Applications; rm -rf ~/Applications/Inkwell.app; ditto --noextattr --noqtn /Applications/Inkwell.app ~/Applications/Inkwell.app && codesign --force --deep --sign - ~/Applications/Inkwell.app && open ~/Applications/Inkwell.app
+     ```
+     From then on, open Inkwell from the **Applications** folder inside your home folder.
 
 ### 🪟 Windows
 
