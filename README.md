@@ -227,12 +227,9 @@ scripts/             Icon generator and the end-to-end smoke test
 GitHub builds every installer automatically. You don't need a Mac or Windows PC.
 
 1. **One-time setup, for the web app:** in the repository, go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**. The web app then deploys to `https://tkfam151.github.io/notetaking-app/` on every push to `main`.
-2. **Make a release:** update `"version"` in `package.json` (for example `1.0.1`), commit, then tag and push:
-   ```bash
-   git tag v1.0.1
-   git push origin v1.0.1
-   ```
-3. Open the **Actions** tab and wait about 15 minutes. The **Build & Release** workflow builds macOS, Windows, Linux, Android, iOS and web versions, then creates a **Release** with all the files attached. That's the link you share.
+2. **Make a release:** change `"version"` in `package.json` (for example to `1.0.1`), commit, and push to `main`.
+   (Pushing a tag such as `v1.0.1` also works.)
+3. Open the **Actions** tab and wait roughly 15–20 minutes. The **Build & Release** workflow builds the macOS, Windows, Linux, Android, iOS and web versions, then creates a **Release** tagged `v1.0.1` with all the files attached. That's the link you share.
 
 You can also run **Build & Release** by hand (**Actions → Build & Release → Run workflow**) to get the files as downloadable artifacts without making a release.
 
