@@ -73,7 +73,7 @@ function textRuns(nodes: PMNode[] | undefined, ctx: Ctx): ParagraphChild[] {
       out.push(new TextRun({ text: '', break: 1 }));
       continue;
     }
-    if (n.type === 'image') {
+    if (n.type === 'image' || n.type === 'drawing') {
       const img = imageRun(n);
       if (img) out.push(img);
       continue;
@@ -214,7 +214,8 @@ function blocks(nodes: PMNode[] | undefined, ctx: Ctx): (Paragraph | Table)[] {
       case 'pageBreak':
         out.push(new Paragraph({ children: [new PageBreak()] }));
         break;
-      case 'image': {
+      case 'image':
+      case 'drawing': {
         const img = imageRun(n);
         if (img) out.push(new Paragraph({ children: [img] }));
         break;

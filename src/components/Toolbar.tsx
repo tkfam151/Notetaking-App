@@ -35,6 +35,7 @@ import {
   Undo2,
   Rows3,
   Ban,
+  PenTool,
 } from 'lucide-react';
 import { FONT_FAMILIES, FONT_SIZES, HIGHLIGHT_COLORS, LINE_HEIGHTS, TEXT_COLORS } from '../editor/extensions';
 import { Menu } from './ui';
@@ -68,6 +69,7 @@ export interface ToolbarActions {
   insertImage: () => void;
   editLink: () => void;
   addComment: () => void;
+  draw: () => void;
   zoom: number;
   setZoom: (z: number) => void;
 }
@@ -372,6 +374,9 @@ export function Toolbar({ editor, actions }: { editor: Editor; actions: ToolbarA
       </Btn>
       <Btn title="Insert image" onClick={actions.insertImage}>
         <ImagePlus size={17} />
+      </Btn>
+      <Btn title="Draw" active={editor.isActive('drawing')} onClick={actions.draw}>
+        <PenTool size={17} />
       </Btn>
       <Menu
         trigger={({ toggle }) => (

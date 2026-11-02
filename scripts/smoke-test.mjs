@@ -90,6 +90,42 @@ ok((await page.locator('.comment-card .comment-text').textContent()) === 'Great 
 ok((await ed.locator('.comment-mark').count()) >= 1, 'commented text highlighted');
 await shot(page, '10-editor-with-content');
 
+// Drawing: draw two strokes and a rectangle, insert, then re-open and erase
+const drag = async (pts) => {
+  const box = await page.locator('.draw-canvas').boundingBox();
+  const at = ([x, y]) => [box.x + box.width * x, box.y + box.height * y];
+  await page.mouse.move(...at(pts[0]));
+  await page.mouse.down();
+  for (const p of pts.slice(1)) await page.mouse.move(...at(p), { steps: 6 });
+  await page.mouse.up();
+};
+await ed.locator('table td').last().click();
+await page.keyboard.press(`${mod}+End`);
+await page.click('button[aria-label="Draw"]');
+await page.waitForSelector('.draw-canvas');
+await drag([[0.1, 0.2], [0.3, 0.5], [0.5, 0.3]]);
+await page.click('button[aria-label="Colour #e03131"]');
+await drag([[0.6, 0.6], [0.8, 0.7], [0.9, 0.5]]);
+await page.click('button[aria-label="Rectangle"]');
+await drag([[0.2, 0.6], [0.4, 0.85]]);
+await shot(page, '15-drawing-dialog');
+await page.click('.draw-header button:has-text("Insert")');
+const drawingImg = ed.locator('img[data-drawing]');
+await drawingImg.waitFor();
+const d1 = JSON.parse(await drawingImg.getAttribute('data-drawing'));
+ok(d1.strokes.length === 3, `drawing inserted with 3 strokes (${d1.strokes.length})`);
+ok((await drawingImg.getAttribute('src')).startsWith('data:image/png'), 'drawing rendered as an image');
+await drawingImg.dblclick();
+await page.waitForSelector('.draw-header:has-text("Edit drawing")');
+await page.click('button[aria-label="Eraser"]');
+await drag([[0.3, 0.45], [0.3, 0.55]]);
+await page.click('.draw-header button:has-text("Save")');
+await page.waitForSelector('.draw-dialog', { state: 'detached' });
+const d2 = JSON.parse(await ed.locator('img[data-drawing]').getAttribute('data-drawing'));
+ok(d2.strokes.length === 2, `eraser removed a stroke on re-edit (${d2.strokes.length} left)`);
+ok((await ed.locator('img[data-drawing]').count()) === 1, 'editing replaces the drawing instead of adding one');
+await shot(page, '16-drawing-in-doc');
+
 // Title
 await page.fill('.ed-title', 'Smoke test doc');
 await page.keyboard.press('Enter');
@@ -116,6 +152,7 @@ await page.reload();
 await page.waitForSelector('.doc-content h1');
 ok((await page.locator('.doc-content').textContent()).includes('universe'), 'content persists after reload');
 ok((await page.inputValue('.ed-title')) === 'Smoke test doc', 'title persists after reload');
+ok((await page.locator('.doc-content img[data-drawing]').count()) === 1, 'drawing persists after reload');
 
 // --- Exports --------------------------------------------------------------
 const outDir = join(tmpdir(), 'inkwell-exports');
@@ -139,6 +176,7 @@ for (const [fmt, label] of [
   const okSig =
     fmt === 'docx' ? buf.subarray(0, 2).toString() === 'PK' : fmt === 'pdf' ? buf.subarray(0, 4).toString() === '%PDF' : buf.length > 20;
   ok(okSig && dl.suggestedFilename() === `Smoke test doc.${fmt}`, `export ${fmt} (${buf.length} bytes)`);
+  if (fmt === 'docx') ok(buf.length > 20000, 'Word export includes the drawing image');
   if (fmt === 'md') {
     const md = buf.toString();
     ok(md.includes('# Inkwell test') && md.includes('**bold**') && md.includes('- [ ] a task') && md.includes('| --- |'), 'markdown content is correct');
