@@ -59,7 +59,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
+      # GitHub's Ubuntu runners ship with the Android SDK preinstalled (ANDROID_HOME is set).
       - run: npm ci
       - run: npm run build
       - run: npx cap sync android
