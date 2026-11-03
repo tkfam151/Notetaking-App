@@ -136,9 +136,11 @@ Open **[tkfam151.github.io/notetaking-app](https://tkfam151.github.io/notetaking
 - **Comments**: comment on any text, reply, resolve and re-open
 - Find & replace (match case, whole words), and word count with reading time
 
-**Accounts and sharing** (web version only; the apps stay account-free)
-- Sign in with email and password, or with an emailed sign-in link
+**Accounts and sharing** (every platform)
+- On the **website**, you sign in first. In the **Mac, Windows, Linux, iPhone and Android apps**, signing in is **optional**: the apps open straight to your documents and work offline, and you only sign in when you tap **Share** or open **Shared**
+- Sign in with email and password (the website also offers an emailed sign-in link)
 - **Share** a document with people by email as **Viewer** or **Editor**, or turn on **"Anyone with the link can view / edit"**
+- Share links always point to the website, so they work for anyone. In the apps, use **File → Open shared link…** (or **Shared → Open a shared link…**) to open one inside the app
 - Documents shared with you appear under **Shared**. Changes sync when you open a document, return to the tab, or every 15 seconds; there is no live typing together
 - Viewers get a read-only page. If the owner removes you, you keep a private copy
 
@@ -254,23 +256,25 @@ You can also run **Build & Release** by hand (**Actions → Build & Release → 
 
 ---
 
-## 🔐 Accounts and sharing (web version)
+## 🔐 Accounts and sharing
 
-Sign-in and sharing only exist in the **web version**. The Mac, Windows, Linux, iPhone and Android apps never ask you to sign in.
-Until you complete these steps, the web version works exactly like the apps: no login, documents saved in the browser.
+Sharing works on every platform. On the **website** you sign in first. In the **apps**, signing in is optional and only needed to share. Your own documents always stay on your device.
+Until you complete these steps, sharing is switched off everywhere and Inkwell works fully offline with no accounts.
 
 It uses [Supabase](https://supabase.com) for accounts and shared documents. The free plan is enough to start.
 
 1. **Create a project:** sign up at [supabase.com](https://supabase.com), click **New project**, pick a name and a database password, and wait about a minute.
-2. **Create the tables:** in the project, open **SQL Editor → New query**, paste the whole of [`supabase/schema.sql`](supabase/schema.sql), and click **Run**.
+2. **Create the tables:** if you connected Supabase's **GitHub integration** to this repository, the tables are created automatically from `supabase/migrations/` when changes reach `main`. Otherwise, open **SQL Editor → New query**, paste the whole of [`supabase/migrations/20261103000000_inkwell_schema.sql`](supabase/migrations/20261103000000_inkwell_schema.sql), and click **Run**.
 3. **Set the website address:** go to **Authentication → URL Configuration**:
    - **Site URL:** `https://tkfam151.github.io/notetaking-app/`
    - **Redirect URLs:** add `https://tkfam151.github.io/notetaking-app/**`
 4. **Copy two values:** go to **Project Settings → API** (or **Data API**) and copy the **Project URL** and the **anon / public** key. Both are safe to make public; the database rules decide who can see what.
+   Never put the **database password** or the **service_role** key in the app or in GitHub variables: those bypass all the rules.
 5. **Give them to GitHub:** in this repository go to **Settings → Secrets and variables → Actions → Variables → New repository variable** and add:
    - `SUPABASE_URL`, set to the Project URL
    - `SUPABASE_ANON_KEY`, set to the anon key
 6. **Redeploy:** open **Actions → Deploy web app → Run workflow**. When it finishes, the website shows the sign-in page.
+   The apps pick up the same two variables the next time **Build & Release** runs, for example when you bump the version.
 
 Notes:
 - New accounts must click a confirmation email. To turn that off while testing: **Authentication → Providers → Email → Confirm email**.

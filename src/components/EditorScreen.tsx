@@ -39,8 +39,8 @@ import { NodeSelection } from '@tiptap/pm/state';
 import { Ruler } from './Ruler';
 import { SettingsDialog } from './SettingsDialog';
 import { ShareDialog } from './ShareDialog';
-import type { Account } from '../App';
-import { cloud, type CloudRole } from '../lib/cloud';
+import { requestSignIn, type Account } from '../App';
+import { cloud, cloudEnabled, parseShareLink, type CloudRole } from '../lib/cloud';
 import { detachFromCloud, fromCloud } from '../lib/sharing';
 
 const DPI = 96;
@@ -684,6 +684,20 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen, accoun
         },
         { label: 'Open…', shortcut: '', onClick: onHome },
         { label: 'Import file…', onClick: importNew },
+        ...(cloudEnabled
+          ? [
+              {
+                label: 'Open shared link…',
+                onClick: async () => {
+                  const text = await ui.prompt('Open a shared link', '', { label: 'Paste the link someone sent you', ok: 'Open' });
+                  if (text === null) return;
+                  const id = parseShareLink(text);
+                  if (!id) ui.toast('That doesn’t look like an Inkwell share link');
+                  else location.hash = `#/shared/${id}`;
+                },
+              },
+            ]
+          : []),
         {
           label: 'Make a copy',
           onClick: async () => {
@@ -981,8 +995,12 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen, accoun
           >
             <History size={20} />
           </button>
-          {sharing && (
-            <button className="btn btn-share" onClick={() => setShareOpen(true)} title="Share with other people">
+          {cloudEnabled && (
+            <button
+              className="btn btn-share"
+              onClick={() => (account ? setShareOpen(true) : requestSignIn())}
+              title={account ? 'Share with other people' : 'Sign in to share'}
+            >
               {cloudRole ? <Users size={16} /> : <UserPlus size={16} />}
               <span className="hide-mobile">Share</span>
             </button>

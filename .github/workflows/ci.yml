@@ -51,5 +51,5 @@ jobs:
           PGPASSWORD: postgres
         run: |
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q \
-            -f supabase/tests/auth-stub.sql -f supabase/schema.sql -f supabase/tests/rls.test.sql 2>&1 | tee out.txt
+            -f supabase/tests/auth-stub.sql -f supabase/migrations/20261103000000_inkwell_schema.sql -f supabase/tests/rls.test.sql 2>&1 | tee out.txt
           grep -q "ALL RLS TESTS PASSED" out.txt

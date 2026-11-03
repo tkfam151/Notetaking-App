@@ -1,4 +1,5 @@
 import { createClient, type User } from '@supabase/supabase-js';
+import { emailRedirectUrl } from './cloud';
 import type { CloudApi, CloudDoc, CloudDocSummary, CloudRole, CloudUser, LinkAccess, Share } from './cloud';
 
 const toUser = (u: User | null | undefined): CloudUser | null => (u ? { id: u.id, email: (u.email ?? '').toLowerCase() } : null);
@@ -13,7 +14,7 @@ export function createSupabaseCloud(url: string, key: string): CloudApi {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
   });
   // Where email links (confirm / magic link / reset) send people back to.
-  const redirectTo = `${location.origin}${location.pathname}`;
+  const redirectTo = emailRedirectUrl();
   const summaryCols = 'id,title,preview,owner_email,updated_at';
 
   const api: CloudApi = {

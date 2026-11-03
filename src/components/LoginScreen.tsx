@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { Loader2, Mail } from 'lucide-react';
-import { cloud, friendlyError } from '../lib/cloud';
+import { cloud, friendlyError, isApp } from '../lib/cloud';
 
 type Mode = 'signin' | 'signup' | 'magic' | 'reset';
 
-/** Web-only sign-in page (the desktop and mobile apps never show it). */
-export function LoginScreen() {
+/**
+ * Sign-in page. Required on the web; in the desktop and mobile apps it's optional and
+ * only opened when you want to share (onCancel takes you back).
+ */
+export function LoginScreen({ onCancel, note }: { onCancel?: () => void; note?: string } = {}) {
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,9 +66,12 @@ export function LoginScreen() {
         <img src="./icon.svg" alt="" width={56} height={56} />
         <h1>{titles[mode]}</h1>
         <p className="muted login-sub">
-          {mode === 'signup'
-            ? 'An account lets you share documents with other people.'
-            : 'Write, draw and share documents from any browser.'}
+          {note ??
+            (mode === 'signup'
+              ? 'An account lets you share documents with other people.'
+              : isApp
+                ? 'Sign in to share documents and see documents shared with you. Your own documents stay on this device.'
+                : 'Write, draw and share documents from any browser.')}
         </p>
 
         {(mode === 'signin' || mode === 'signup') && (
@@ -122,9 +128,12 @@ export function LoginScreen() {
         <div className="login-links">
           {mode === 'signin' && (
             <>
-              <button className="link-btn" onClick={() => setMode('magic')}>
-                Email me a sign-in link instead
-              </button>
+              {/* Emailed links open the website, so this option is web-only */}
+              {!isApp && (
+                <button className="link-btn" onClick={() => setMode('magic')}>
+                  Email me a sign-in link instead
+                </button>
+              )}
               <button className="link-btn" onClick={() => setMode('reset')}>
                 Forgot password?
               </button>
@@ -135,15 +144,25 @@ export function LoginScreen() {
               Back to sign in
             </button>
           )}
+          {onCancel && (
+            <button className="link-btn muted" onClick={onCancel}>
+              Cancel
+            </button>
+          )}
         </div>
+        {isApp && (mode === 'signup' || mode === 'reset') && (
+          <p className="muted small login-app-note">
+            The confirmation or reset email opens the Inkwell website. After that, come back here and sign in.
+          </p>
+        )}
       </div>
-      <p className="muted small login-foot">
+      {!isApp && <p className="muted small login-foot">
         Prefer no account? The{' '}
         <a href="https://github.com/tkfam151/notetaking-app/releases/latest" target="_blank" rel="noreferrer">
           Mac, Windows, Linux and Android apps
         </a>{' '}
         work offline without signing in.
-      </p>
+      </p>}
     </div>
   );
 }

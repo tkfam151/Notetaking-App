@@ -1,4 +1,4 @@
--- Security tests for schema.sql. Run with:  psql -v ON_ERROR_STOP=1 -f auth-stub.sql -f ../schema.sql -f rls.test.sql
+-- Security tests for migrations/20261103000000_inkwell_schema.sql. Run with:  psql -v ON_ERROR_STOP=1 -f auth-stub.sql -f ../migrations/20261103000000_inkwell_schema.sql -f rls.test.sql
 \set QUIET on
 \o /dev/null
 set client_min_messages = notice;

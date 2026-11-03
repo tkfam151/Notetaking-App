@@ -1,7 +1,7 @@
 {
   "name": "inkwell",
   "productName": "Inkwell",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Inkwell \u2014 a beautiful, offline-first word processor for Mac, Windows, Linux, iOS, Android and the web.",
   "author": "Inkwell",
   "private": true,

@@ -2101,3 +2101,15 @@ button.version-row {
     padding: 0;
   }
 }
+.login-app-note {
+  margin: 14px 0 0;
+}
+.login-links .muted {
+  color: var(--text-muted);
+}
+.btn-signin {
+  border-radius: 18px;
+}
+.open-link-btn {
+  margin-bottom: 14px;
+}

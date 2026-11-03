@@ -20,6 +20,8 @@ import {
   Upload,
   Users,
   LogOut,
+  LogIn,
+  Link2,
   X,
 } from 'lucide-react';
 import {
@@ -39,8 +41,8 @@ import { pickFile } from '../lib/platform';
 import type { Folder, InkDoc, Settings } from '../types';
 import { Menu, relativeTime, useUI, type MenuItem } from './ui';
 import { SettingsDialog } from './SettingsDialog';
-import type { Account } from '../App';
-import { cloud, friendlyError, type CloudDocSummary } from '../lib/cloud';
+import { requestSignIn, type Account } from '../App';
+import { cloud, cloudEnabled, friendlyError, parseShareLink, type CloudDocSummary } from '../lib/cloud';
 import { openSharedDoc } from '../lib/sharing';
 
 type Section =
@@ -85,6 +87,14 @@ export function Library({
       .then((api) => api.listMine())
       .then(setCloudDocs, (e) => setCloudError(friendlyError(e)));
   }, [section.kind, account]);
+
+  const openLink = async () => {
+    const text = await ui.prompt('Open a shared link', '', { label: 'Paste the link someone sent you', ok: 'Open' });
+    if (text === null) return;
+    const id = parseShareLink(text);
+    if (!id) ui.toast('That doesn’t look like an Inkwell share link');
+    else openCloudDoc(id);
+  };
 
   const openCloudDoc = async (cloudId: string) => {
     try {
@@ -312,7 +322,15 @@ export function Library({
         <button className="icon-btn" onClick={() => setShowSettings(true)} aria-label="Settings" title="Settings">
           <SettingsIcon size={20} />
         </button>
-        {account && <AccountMenu account={account} />}
+        {account ? (
+          <AccountMenu account={account} />
+        ) : (
+          cloudEnabled && (
+            <button className="btn btn-sm btn-signin" onClick={requestSignIn} title="Sign in to share documents">
+              <LogIn size={16} /> <span className="hide-mobile">Sign in</span>
+            </button>
+          )
+        )}
       </header>
 
       <div className="lib-body">
@@ -327,7 +345,7 @@ export function Library({
           <nav>
             {navItem({ kind: 'recent' }, 'All documents', <Clock size={18} />)}
             {navItem({ kind: 'starred' }, 'Starred', <Star size={18} />)}
-            {account && navItem({ kind: 'shared' }, 'Shared', <Users size={18} />)}
+            {cloudEnabled && navItem({ kind: 'shared' }, 'Shared', <Users size={18} />)}
             {navItem({ kind: 'trash' }, 'Trash', <Trash2 size={18} />, docs?.filter((d) => d.trashed).length)}
           </nav>
           <div className="nav-heading">
@@ -435,9 +453,23 @@ export function Library({
               </div>
             </div>
 
-            {section.kind === 'shared' && (
-              <SharedList docs={cloudDocs} error={cloudError} query={query} layout={layout} onOpen={openCloudDoc} />
-            )}
+            {section.kind === 'shared' &&
+              (account ? (
+                <>
+                  <button className="btn btn-sm open-link-btn" onClick={openLink}>
+                    <Link2 size={15} /> Open a shared link…
+                  </button>
+                  <SharedList docs={cloudDocs} error={cloudError} query={query} layout={layout} onOpen={openCloudDoc} />
+                </>
+              ) : (
+                <div className="empty">
+                  <Users size={40} />
+                  <p>Sign in to share your documents and to see documents other people share with you. Your own documents stay on this device.</p>
+                  <button className="btn btn-primary" onClick={requestSignIn}>
+                    <LogIn size={16} /> Sign in
+                  </button>
+                </div>
+              ))}
 
             {section.kind !== 'shared' && docs && visible.length === 0 && (
               <div className="empty">

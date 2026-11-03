@@ -1,10 +1,11 @@
 /**
- * Accounts and sharing for the WEB version of Inkwell.
+ * Accounts and sharing.
  *
- * The desktop (Electron) and mobile (Capacitor) apps never use this: they stay fully
- * local with no login. On the web, cloud features switch on only when the build has
- * Supabase settings (VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY). Without them the
- * web app behaves exactly like before (local only, no login).
+ * Switched on only when the build has Supabase settings (VITE_SUPABASE_URL +
+ * VITE_SUPABASE_ANON_KEY); without them Inkwell is purely local, exactly as before.
+ *  - Web: signing in is required (it's how the browser version knows whose documents to show).
+ *  - Desktop & mobile apps: signing in is optional and only needed to share. The apps
+ *    always open straight to your documents and work offline.
  */
 import { isElectron, isNative } from './platform';
 
@@ -82,8 +83,14 @@ const SUPABASE_URL = env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_KEY = env.VITE_SUPABASE_ANON_KEY as string | undefined;
 const FAKE = env.VITE_CLOUD === 'fake';
 
-/** True only for the web build with cloud settings. Never true in the desktop or mobile apps. */
-export const cloudEnabled = !isNative && !isElectron && (FAKE || (!!SUPABASE_URL && !!SUPABASE_KEY));
+/** True when this build can sign in and share (all platforms, if configured). */
+export const cloudEnabled = FAKE || (!!SUPABASE_URL && !!SUPABASE_KEY);
+/** Only the web version makes you sign in before using it. */
+export const isApp = isNative || isElectron;
+export const loginRequired = cloudEnabled && !isApp;
+
+/** Public address of the web version, used for share links made inside the apps. */
+const WEB_URL = (import.meta.env.VITE_WEB_URL as string | undefined) ?? 'https://tkfam151.github.io/notetaking-app/';
 
 let apiPromise: Promise<CloudApi> | null = null;
 
@@ -99,7 +106,20 @@ export function cloud(): Promise<CloudApi> {
 
 /** The address people use to open a shared document. */
 export function shareLink(cloudId: string) {
-  return `${location.origin}${location.pathname}#/shared/${cloudId}`;
+  // Links must work for everyone, so the apps (file:// or capacitor://) link to the website.
+  const base = isApp ? WEB_URL : `${location.origin}${location.pathname}`;
+  return `${base}#/shared/${cloudId}`;
+}
+
+/** Where emailed links (confirm account, reset password) send people: always the website. */
+export function emailRedirectUrl() {
+  return isApp ? WEB_URL : `${location.origin}${location.pathname}`;
+}
+
+/** Pulls the document id out of a pasted share link (or a bare id). */
+export function parseShareLink(text: string): string | null {
+  const m = text.trim().match(/(?:#\/shared\/)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+  return m ? m[1].toLowerCase() : null;
 }
 
 export function friendlyError(e: unknown): string {

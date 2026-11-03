@@ -4,13 +4,14 @@ import { Library } from './components/Library';
 import { EditorScreen } from './components/EditorScreen';
 import { LoginScreen, NewPasswordScreen } from './components/LoginScreen';
 import { getSettings, saveSettings, DEFAULT_SETTINGS, selectAccountStorage } from './lib/db';
-import { cloud, cloudEnabled, friendlyError, type CloudUser } from './lib/cloud';
+import { cloud, cloudEnabled, friendlyError, isApp, loginRequired, type CloudUser } from './lib/cloud';
 import { openSharedDoc } from './lib/sharing';
 import type { Settings } from './types';
 
-type Route = { kind: 'home' } | { kind: 'doc'; id: string } | { kind: 'shared'; cloudId: string };
+type Route = { kind: 'home' } | { kind: 'doc'; id: string } | { kind: 'shared'; cloudId: string } | { kind: 'login' };
 
 function readRoute(): Route {
+  if (location.hash.startsWith('#/login')) return { kind: 'login' };
   const doc = location.hash.match(/^#\/doc\/([\w-]+)/);
   if (doc) return { kind: 'doc', id: doc[1] };
   const shared = location.hash.match(/^#\/shared\/([\w-]+)/);
@@ -23,12 +24,22 @@ export interface Account {
   signOut: () => void;
 }
 
+/** Apps only: open the (optional) sign-in page, then come back here. */
+export function requestSignIn() {
+  try {
+    sessionStorage.setItem('inkwell.afterLogin', location.hash || '#/');
+  } catch {
+    /* ignore */
+  }
+  location.hash = '#/login';
+}
+
 export default function App() {
   const [route, setRoute] = useState<Route>(readRoute);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  // Web with accounts: 'loading' until we know whether someone is signed in.
-  const [user, setUser] = useState<CloudUser | null | 'loading'>(cloudEnabled ? 'loading' : null);
-  const [storageReady, setStorageReady] = useState(!cloudEnabled);
+  // Web: 'loading' until we know whether someone is signed in. Apps never wait for this.
+  const [user, setUser] = useState<CloudUser | null | 'loading'>(loginRequired ? 'loading' : null);
+  const [storageReady, setStorageReady] = useState(!loginRequired);
   const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
@@ -37,7 +48,7 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  // Sign-in state (web only)
+  // Sign-in state
   useEffect(() => {
     if (!cloudEnabled) return;
     let offAuth = () => {};
@@ -55,10 +66,11 @@ export default function App() {
     };
   }, []);
 
-  // Each account gets its own on-device storage.
+  // Web: each account gets its own on-device storage. (The apps are single-user devices
+  // and keep one store, so signing in or out never hides your documents there.)
   const userId = user && user !== 'loading' ? user.id : null;
   useEffect(() => {
-    if (!cloudEnabled) return;
+    if (!loginRequired) return;
     setStorageReady(false);
     if (!userId) return;
     selectAccountStorage(userId).then(() => setStorageReady(true));
@@ -108,7 +120,22 @@ export default function App() {
     }, 50);
   }, []);
 
-  if (cloudEnabled) {
+  // Apps: after signing in on the optional login page, go back to where you were.
+  const signedIn = !!user && user !== 'loading';
+  useEffect(() => {
+    if (isApp && signedIn && route.kind === 'login') {
+      let back = '#/';
+      try {
+        back = sessionStorage.getItem('inkwell.afterLogin') || '#/';
+        sessionStorage.removeItem('inkwell.afterLogin');
+      } catch {
+        /* ignore */
+      }
+      location.replace(back);
+    }
+  }, [signedIn, route.kind]);
+
+  if (loginRequired) {
     if (user === 'loading') return <div className="loading-screen" />;
     if (recovering && user) return <NewPasswordScreen onDone={() => setRecovering(false)} />;
     if (!user) return <LoginScreen />;
@@ -121,12 +148,27 @@ export default function App() {
           user,
           signOut: () => {
             cloud().then((api) => api.signOut());
-            location.hash = '#/';
+            if (!isApp) location.hash = '#/';
           },
         }
       : null;
 
-  if (route.kind === 'shared') return <SharedOpener cloudId={route.cloudId} account={account} />;
+  if (route.kind === 'login') {
+    if (!cloudEnabled || signedIn) return <div className="loading-screen" />;
+    return <LoginScreen onCancel={() => (history.length > 1 ? history.back() : (location.hash = '#/'))} />;
+  }
+
+  if (route.kind === 'shared') {
+    if (cloudEnabled && !account) {
+      return (
+        <LoginScreen
+          note="Sign in to open the document that was shared with you."
+          onCancel={() => (location.hash = '#/')}
+        />
+      );
+    }
+    return <SharedOpener cloudId={route.cloudId} account={account} />;
+  }
 
   return route.kind === 'doc' ? (
     <EditorScreen
@@ -148,7 +190,7 @@ function SharedOpener({ cloudId, account }: { cloudId: string; account: Account 
   const [state, setState] = useState<'loading' | 'denied' | string>('loading');
   useEffect(() => {
     if (!cloudEnabled) {
-      setState('Shared links open in the web version of Inkwell.');
+      setState('This version of Inkwell can’t open shared documents.');
       return;
     }
     openSharedDoc(cloudId)

@@ -17,6 +17,12 @@ on:
 permissions:
   contents: write
 
+# Sign-in and sharing (optional in the apps). Without these repository variables the
+# apps are built exactly as before: fully local, no accounts.
+env:
+  VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+  VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+
 jobs:
   desktop:
     name: Desktop (${{ matrix.name }})

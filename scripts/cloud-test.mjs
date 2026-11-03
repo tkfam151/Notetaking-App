@@ -178,6 +178,57 @@ await alice.click('.login-submit');
 await alice.waitForSelector('.doc-card:has-text("Team plan")');
 ok(true, 'signing back in shows alice’s documents again');
 
+// --- The desktop/mobile apps: sign-in is optional ------------------------------------
+// Same fake server (same browser profile), but this tab reports itself as the Electron app.
+const app = await ctx.newPage();
+app.on('pageerror', (e) => errors.push(`app: ${e.message}`));
+await app.addInitScript(() => {
+  Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 Chrome/140 Electron/39.8.10 Safari/537.36' });
+  sessionStorage.removeItem('inkwell-fake-session');
+});
+await app.goto(URL);
+await app.waitForSelector('.lib-header');
+ok((await app.locator('.login-card').count()) === 0, 'app opens straight to documents (no login)');
+ok(await app.locator('.btn-signin').isVisible(), 'app shows an optional Sign in button');
+await app.click('.btn-new');
+await app.waitForSelector('.doc-content');
+await app.locator('.doc-content').click();
+await app.keyboard.type('Written in the Mac app.');
+await app.fill('.ed-title', 'App notes');
+await app.keyboard.press('Enter');
+await app.click('.btn-share');
+await app.waitForSelector('.login-card');
+ok((await app.locator('text=Email me a sign-in link').count()) === 0, 'app login hides the web-only email-link option');
+await app.click('.login-links button:has-text("Cancel")');
+await app.waitForSelector('.doc-content');
+ok((await app.textContent('.doc-content')).includes('Written in the Mac app'), 'cancelling sign-in returns to the document');
+await app.click('.btn-share');
+await app.waitForSelector('.login-card');
+await app.fill('input[type=email]', 'bob@example.com');
+await app.fill('input[type=password]', 'secret123');
+await app.click('.login-submit');
+await app.waitForSelector('.doc-content');
+ok((await app.textContent('.doc-content')).includes('Written in the Mac app'), 'after signing in the app returns to the same document');
+await app.click('.btn-share');
+await app.waitForSelector('.share-url input');
+const appLink = await app.inputValue('.share-url input');
+ok(appLink.startsWith('https://tkfam151.github.io/notetaking-app/#/shared/'), 'links made in the app point to the website');
+await app.fill('.share-invite input', 'carol@example.com');
+await app.selectOption('.share-invite select', 'view');
+await app.click('.share-invite button:has-text("Invite")');
+await app.waitForSelector('.share-people li:has-text("carol@example.com")');
+await app.click('.modal-footer button:has-text("Done")');
+await carol.goto(URL);
+await carol.click('.nav-item:has-text("Shared")');
+ok(await until(() => carol.locator('.doc-card:has-text("App notes")').isVisible()), 'web user sees a document shared from the app');
+await app.click('button[aria-label="Back to documents"]');
+await app.waitForSelector('.doc-card:has-text("App notes")');
+await app.click('.account-btn');
+await app.click('.menu-item:has-text("Sign out")');
+await app.waitForSelector('.btn-signin');
+ok((await app.locator('.doc-card:has-text("App notes")').count()) === 1, 'signing out in the app keeps documents on the device');
+ok((await app.locator('.login-card').count()) === 0, 'signing out in the app does not show a login wall');
+
 ok(errors.length === 0, `no browser errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
 await browser.close();
 console.log(failures ? `\n${failures} check(s) failed` : '\nAll checks passed');

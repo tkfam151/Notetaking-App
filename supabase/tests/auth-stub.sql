@@ -1,4 +1,4 @@
--- Minimal stand-in for Supabase's auth schema, so schema.sql can be tested on plain Postgres.
+-- Minimal stand-in for Supabase's auth schema, so migrations/20261103000000_inkwell_schema.sql can be tested on plain Postgres.
 create schema if not exists auth;
 create table if not exists auth.users (id uuid primary key, email text);
 create or replace function auth.uid() returns uuid language sql stable as $$

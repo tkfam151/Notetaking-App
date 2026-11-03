@@ -2,7 +2,7 @@
  * In-browser stand-in for the Supabase backend, used ONLY by the automated tests
  * (build with VITE_CLOUD=fake). Data lives in localStorage so several tabs act like
  * several devices; the signed-in user is per tab (sessionStorage). It mirrors the
- * permission rules in supabase/schema.sql.
+ * permission rules in supabase/migrations/20261103000000_inkwell_schema.sql.
  */
 import type { CloudApi, CloudDoc, CloudRole, CloudUser, LinkAccess, Share } from './cloud';
 
