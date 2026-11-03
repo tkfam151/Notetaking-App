@@ -59,9 +59,12 @@ ok((await ed.locator('ul[data-type="taskList"] li').count()) === 1, 'checklist v
 
 // Toolbar: font size, colour, alignment
 await page.keyboard.type('Big centred text');
-await page.keyboard.down('Shift');
-await page.keyboard.press('Home');
-await page.keyboard.up('Shift');
+// Select the line once the editor has the text (pressing Shift+Home instantly can race the
+// editor on slow CI machines). A triple-click selects the whole paragraph, like a person would.
+const bigLine = ed.locator('p', { hasText: 'Big centred text' });
+await bigLine.waitFor();
+await bigLine.click({ clickCount: 3 });
+await page.waitForFunction(() => (getSelection()?.toString() ?? '').includes('Big centred text'));
 await page.fill('.tb-size', '24');
 await page.press('.tb-size', 'Enter');
 ok(
@@ -71,6 +74,12 @@ ok(
     .then(() => true, () => false),
   'font size from toolbar',
 );
+if (!(await ed.locator('span[style*="font-size: 24pt"]').count())) {
+  // Diagnostics for CI: what was selected and what the paragraph looks like
+  console.log('   selection:', JSON.stringify(await page.evaluate(() => getSelection()?.toString())));
+  console.log('   size box:', await page.inputValue('.tb-size'));
+  console.log('   last paragraph:', await ed.locator('p').last().evaluate((el) => el.outerHTML));
+}
 await page.click('button[title="Align"]');
 await page.click('.menu-item:has-text("Center")');
 ok((await ed.locator('p[style*="text-align: center"]').count()) === 1, 'center alignment');

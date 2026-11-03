@@ -185,15 +185,18 @@ function TablePicker({ onPick, close }: { onPick: (r: number, c: number) => void
  * The font size box. It keeps what you type while it has focus (the toolbar re-renders
  * constantly as the cursor moves), and applies it on Enter or when you click away.
  */
-function FontSizeBox({ size, onApply }: { size: number; onApply: (n: number) => void }) {
+function FontSizeBox({ editor, size, onApply }: { editor: Editor; size: number; onApply: (n: number, range: { from: number; to: number }) => void }) {
   const [value, setValue] = useState(String(size));
   const editing = useRef(false);
+  // Typing here takes focus away from the document; remember which text was selected
+  // so the new size is applied to it even if the browser resets the selection on refocus.
+  const range = useRef({ from: 0, to: 0 });
   useEffect(() => {
     if (!editing.current) setValue(String(size));
   }, [size]);
   const apply = () => {
     const n = parseFloat(value);
-    if (n > 0 && n !== size) onApply(n);
+    if (n > 0 && n !== size) onApply(n, range.current);
     else setValue(String(size));
   };
   return (
@@ -204,7 +207,11 @@ function FontSizeBox({ size, onApply }: { size: number; onApply: (n: number) => 
       title="Font size"
       inputMode="numeric"
       list="inkwell-font-sizes"
-      onFocus={() => (editing.current = true)}
+      onFocus={() => {
+        editing.current = true;
+        const { from, to } = editor.state.selection;
+        range.current = { from, to };
+      }}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
@@ -246,9 +253,11 @@ export function Toolbar({ editor, actions }: { editor: Editor; actions: ToolbarA
   const align = (['left', 'center', 'right', 'justify'] as const).find((a) => editor.isActive({ textAlign: a })) ?? 'left';
   const AlignIcon = { left: AlignLeft, center: AlignCenter, right: AlignRight, justify: AlignJustify }[align];
 
-  const setSize = (pt: number) => {
+  const setSize = (pt: number, range?: { from: number; to: number }) => {
     const v = Math.max(1, Math.min(400, Math.round(pt)));
-    c().setFontSize(`${v}pt`).run();
+    const chain = c();
+    if (range && range.to <= editor.state.doc.content.size) chain.setTextSelection(range);
+    chain.setFontSize(`${v}pt`).run();
   };
 
   const inList = editor.isActive('bulletList') || editor.isActive('orderedList') || editor.isActive('taskList');
@@ -319,7 +328,7 @@ export function Toolbar({ editor, actions }: { editor: Editor; actions: ToolbarA
       <Btn title="Decrease font size" onClick={() => setSize([...FONT_SIZES].reverse().find((s) => s < size) ?? size - 1)}>
         <Minus size={15} />
       </Btn>
-      <FontSizeBox size={size} onApply={setSize} />
+      <FontSizeBox editor={editor} size={size} onApply={setSize} />
       <datalist id="inkwell-font-sizes">
         {FONT_SIZES.map((s) => (
           <option key={s} value={s} />
