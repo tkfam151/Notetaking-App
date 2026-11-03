@@ -64,7 +64,13 @@ await page.keyboard.press('Home');
 await page.keyboard.up('Shift');
 await page.fill('.tb-size', '24');
 await page.press('.tb-size', 'Enter');
-ok((await ed.locator('span[style*="font-size: 24pt"]').count()) === 1, 'font size from toolbar');
+ok(
+  await ed
+    .locator('span[style*="font-size: 24pt"]')
+    .waitFor({ timeout: 5000 })
+    .then(() => true, () => false),
+  'font size from toolbar',
+);
 await page.click('button[title="Align"]');
 await page.click('.menu-item:has-text("Center")');
 ok((await ed.locator('p[style*="text-align: center"]').count()) === 1, 'center alignment');
