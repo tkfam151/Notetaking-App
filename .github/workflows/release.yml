@@ -8,14 +8,19 @@ on:
   push:
     tags: ['v*']
     # Also build a release automatically when the version number (package.json) or this
-    # workflow changes on main or on a Claude working branch. The release and its
-    # `vX.Y.Z` tag are created by the workflow itself.
-    branches: [main, 'claude/**']
+    # workflow changes on main. The release and its `vX.Y.Z` tag are created by the
+    # workflow itself. (Only main publishes, so builds never compete for Mac runners.)
+    branches: [main]
     paths: ['package.json', '.github/workflows/release.yml']
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# One release build at a time; a newer push replaces a queued older one.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 # Sign-in and sharing settings (optional in the apps) come from .env.production.
 

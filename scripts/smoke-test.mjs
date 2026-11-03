@@ -71,6 +71,12 @@ ok(
     .then(() => true, () => false),
   'font size from toolbar',
 );
+if (!(await ed.locator('span[style*="font-size: 24pt"]').count())) {
+  // Diagnostics for CI: what was selected and what the paragraph looks like
+  console.log('   selection:', JSON.stringify(await page.evaluate(() => getSelection()?.toString())));
+  console.log('   size box:', await page.inputValue('.tb-size'));
+  console.log('   last paragraph:', await ed.locator('p').last().evaluate((el) => el.outerHTML));
+}
 await page.click('button[title="Align"]');
 await page.click('.menu-item:has-text("Center")');
 ok((await ed.locator('p[style*="text-align: center"]').count()) === 1, 'center alignment');
