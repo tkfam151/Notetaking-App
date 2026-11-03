@@ -268,13 +268,10 @@ It uses [Supabase](https://supabase.com) for accounts and shared documents. The 
 3. **Set the website address:** go to **Authentication → URL Configuration**:
    - **Site URL:** `https://tkfam151.github.io/notetaking-app/`
    - **Redirect URLs:** add `https://tkfam151.github.io/notetaking-app/**`
-4. **Copy two values:** go to **Project Settings → API** (or **Data API**) and copy the **Project URL** and the **anon / public** key. Both are safe to make public; the database rules decide who can see what.
-   Never put the **database password** or the **service_role** key in the app or in GitHub variables: those bypass all the rules.
-5. **Give them to GitHub:** in this repository go to **Settings → Secrets and variables → Actions → Variables → New repository variable** and add:
-   - `SUPABASE_URL`, set to the Project URL
-   - `SUPABASE_ANON_KEY`, set to the anon key
-6. **Redeploy:** open **Actions → Deploy web app → Run workflow**. When it finishes, the website shows the sign-in page.
-   The apps pick up the same two variables the next time **Build & Release** runs, for example when you bump the version.
+4. **Put the two public values in [`.env.production`](.env.production):** the **Project URL**, and the **publishable** key (`sb_publishable_…`, or the older **anon** key), from **Project Settings → API Keys**. Both are safe to make public, because the database rules decide who can see what.
+   Never put the **secret** key (`sb_secret_…`), the **service_role** key or the **database password** in the app: those bypass every rule.
+5. **Check it:** **Actions → Check Supabase setup → Run workflow** reports whether the key works, whether the tables and security functions exist, and whether sign-up is allowed. It runs by itself whenever `.env.production` or `supabase/` changes.
+6. **Publish:** pushing to `main` redeploys the website with the sign-in page. Bumping the version builds new apps with sharing included.
 
 Notes:
 - New accounts must click a confirmation email. To turn that off while testing: **Authentication → Providers → Email → Confirm email**.

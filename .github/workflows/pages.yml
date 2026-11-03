@@ -29,12 +29,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Supabase settings (sign-in + sharing) come from .env.production
       - run: npm run build
-        env:
-          # Turns on sign-in and sharing for the web version (see README → "Accounts and sharing").
-          # Set these under Settings → Secrets and variables → Actions → Variables.
-          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
