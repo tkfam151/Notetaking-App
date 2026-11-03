@@ -21,7 +21,8 @@
     "cap:sync": "npm run build && cap sync",
     "android:open": "npm run cap:sync && cap open android",
     "ios:open": "npm run cap:sync && cap open ios",
-    "test:cloud": "node scripts/cloud-test.mjs"
+    "test:cloud": "node scripts/cloud-test.mjs",
+    "dist:mac-zip": "npm run build && electron-builder --mac zip --arm64 --x64 --publish never -c.mac.target=zip '-c.mac.artifactName=Inkwell-${version}-mac-${arch}.${ext}'"
   },
   "build": {
     "appId": "app.inkwell.editor",
