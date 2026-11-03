@@ -136,6 +136,14 @@ Open **[tkfam151.github.io/notetaking-app](https://tkfam151.github.io/notetaking
 - **Comments**: comment on any text, reply, resolve and re-open
 - Find & replace (match case, whole words), and word count with reading time
 
+**Accounts and sharing** (every platform)
+- On the **website**, you sign in first. In the **Mac, Windows, Linux, iPhone and Android apps**, signing in is **optional**: the apps open straight to your documents and work offline, and you only sign in when you tap **Share** or open **Shared**
+- Sign in with email and password (the website also offers an emailed sign-in link)
+- **Share** a document with people by email as **Viewer** or **Editor**, or turn on **"Anyone with the link can view / edit"**
+- Share links always point to the website, so they work for anyone. In the apps, use **File → Open shared link…** (or **Shared → Open a shared link…**) to open one inside the app
+- Documents shared with you appear under **Shared**. Changes sync when you open a document, return to the tab, or every 15 seconds; there is no live typing together
+- Viewers get a read-only page. If the owner removes you, you keep a private copy
+
 **Templates** (like Pages)
 - Blank, Notes, To-do list, Meeting notes, Report, Letter, Résumé, Essay, Journal and Class notes
 
@@ -248,8 +256,33 @@ You can also run **Build & Release** by hand (**Actions → Build & Release → 
 
 ---
 
+## 🔐 Accounts and sharing
+
+Sharing works on every platform. On the **website** you sign in first. In the **apps**, signing in is optional and only needed to share. Your own documents always stay on your device.
+Until you complete these steps, sharing is switched off everywhere and Inkwell works fully offline with no accounts.
+
+It uses [Supabase](https://supabase.com) for accounts and shared documents. The free plan is enough to start.
+
+1. **Create a project:** sign up at [supabase.com](https://supabase.com), click **New project**, pick a name and a database password, and wait about a minute.
+2. **Create the tables:** if you connected Supabase's **GitHub integration** to this repository, the tables are created automatically from `supabase/migrations/` when changes reach `main`. Otherwise, open **SQL Editor → New query**, paste the whole of [`supabase/migrations/20261103000000_inkwell_schema.sql`](supabase/migrations/20261103000000_inkwell_schema.sql), and click **Run**.
+3. **Set the website address:** go to **Authentication → URL Configuration**:
+   - **Site URL:** `https://tkfam151.github.io/notetaking-app/`
+   - **Redirect URLs:** add `https://tkfam151.github.io/notetaking-app/**`
+4. **Put the two public values in [`.env.production`](.env.production):** the **Project URL**, and the **publishable** key (`sb_publishable_…`, or the older **anon** key), from **Project Settings → API Keys**. Both are safe to make public, because the database rules decide who can see what.
+   Never put the **secret** key (`sb_secret_…`), the **service_role** key or the **database password** in the app: those bypass every rule.
+5. **Check it:** **Actions → Check Supabase setup → Run workflow** reports whether the key works, whether the tables and security functions exist, and whether sign-up is allowed. It runs by itself whenever `.env.production` or `supabase/` changes.
+6. **Publish:** pushing to `main` redeploys the website with the sign-in page. Bumping the version builds new apps with sharing included.
+
+Notes:
+- New accounts must click a confirmation email. To turn that off while testing: **Authentication → Providers → Email → Confirm email**.
+- Supabase's built-in email sender is limited to a few emails per hour. For real use, add your own SMTP server under **Authentication → Emails**.
+- Inkwell doesn't email the people you invite. Send them the link from the **Share** window, and they sign in with the address you invited.
+- How it's protected: the database's row-level security rules decide who can read and write each document, and link-shared documents can't be listed or searched for. These rules are tested on every push (`supabase/tests/rls.test.sql`).
+
+---
+
 ## Current limitations
 
-- **No real-time co-editing or cloud sync yet.** Documents live on each device; use backup and restore to move them. Storage goes through one small module (`src/lib/db.ts`), so a sync server can be added later.
+- **No live co-editing.** Shared documents (web version) sync every few seconds, not keystroke by keystroke. If two people edit at the same moment, the last save wins. Your own unshared documents live on each device; use backup and restore to move them.
 - **Page view is approximate on screen.** Page boundaries are shown as markers on one continuous sheet. Exact page layout happens when you print or export to PDF or Word.
 - **Unsigned builds.** See the install notes above for the one-time security prompts. Signing needs paid Apple ($99/yr) and Windows code-signing certificates.

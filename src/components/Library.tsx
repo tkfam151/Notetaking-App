@@ -18,6 +18,10 @@ import {
   Star,
   Trash2,
   Upload,
+  Users,
+  LogOut,
+  LogIn,
+  Link2,
   X,
 } from 'lucide-react';
 import {
@@ -37,17 +41,28 @@ import { pickFile } from '../lib/platform';
 import type { Folder, InkDoc, Settings } from '../types';
 import { Menu, relativeTime, useUI, type MenuItem } from './ui';
 import { SettingsDialog } from './SettingsDialog';
+import { requestSignIn, type Account } from '../App';
+import { cloud, cloudEnabled, friendlyError, parseShareLink, type CloudDocSummary } from '../lib/cloud';
+import { openSharedDoc } from '../lib/sharing';
 
-type Section = { kind: 'recent' } | { kind: 'starred' } | { kind: 'trash' } | { kind: 'folder'; id: string };
+type Section =
+  | { kind: 'recent' }
+  | { kind: 'starred' }
+  | { kind: 'shared' }
+  | { kind: 'trash' }
+  | { kind: 'folder'; id: string };
 
 export function Library({
   settings,
   updateSettings,
   onOpen,
+  account,
 }: {
   settings: Settings;
   updateSettings: (p: Partial<Settings>) => void;
   onOpen: (id: string) => void;
+  /** Web with accounts only */
+  account: Account | null;
 }) {
   const ui = useUI();
   const [docs, setDocs] = useState<InkDoc[] | null>(null);
@@ -62,6 +77,34 @@ export function Library({
   const [showSettings, setShowSettings] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const templates = useMemo(getTemplates, []);
+  const [cloudDocs, setCloudDocs] = useState<CloudDocSummary[] | null>(null);
+  const [cloudError, setCloudError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (section.kind !== 'shared' || !account) return;
+    setCloudError(null);
+    cloud()
+      .then((api) => api.listMine())
+      .then(setCloudDocs, (e) => setCloudError(friendlyError(e)));
+  }, [section.kind, account]);
+
+  const openLink = async () => {
+    const text = await ui.prompt('Open a shared link', '', { label: 'Paste the link someone sent you', ok: 'Open' });
+    if (text === null) return;
+    const id = parseShareLink(text);
+    if (!id) ui.toast('That doesn’t look like an Inkwell share link');
+    else openCloudDoc(id);
+  };
+
+  const openCloudDoc = async (cloudId: string) => {
+    try {
+      const localId = await openSharedDoc(cloudId);
+      if (localId) onOpen(localId);
+      else ui.toast('You no longer have access to that document');
+    } catch (e) {
+      ui.toast(friendlyError(e));
+    }
+  };
 
   const refresh = useCallback(async () => {
     const [d, f] = await Promise.all([listDocs(), listFolders()]);
@@ -133,7 +176,20 @@ export function Library({
             icon: <Trash2 size={16} />,
             danger: true,
             onClick: async () => {
-              if (await ui.confirm('Delete forever?', `“${doc.title}” will be permanently deleted.`, { ok: 'Delete', danger: true })) {
+              const msg =
+                doc.cloudId && doc.cloudRole === 'owner'
+                  ? `“${doc.title}” will be permanently deleted, and the people you shared it with will lose access.`
+                  : `“${doc.title}” will be permanently deleted.`;
+              if (await ui.confirm('Delete forever?', msg, { ok: 'Delete', danger: true })) {
+                if (doc.cloudId && account) {
+                  try {
+                    const api = await cloud();
+                    if (doc.cloudRole === 'owner') await api.deleteDoc(doc.cloudId);
+                    else await api.removeShare(doc.cloudId, account.user.email);
+                  } catch {
+                    /* offline: the local copy is still removed */
+                  }
+                }
                 await deleteDocForever(doc.id);
                 refresh();
               }
@@ -201,6 +257,8 @@ export function Library({
       ? 'All documents'
       : section.kind === 'starred'
         ? 'Starred'
+        : section.kind === 'shared'
+          ? 'Shared'
         : section.kind === 'trash'
           ? 'Trash'
           : folders.find((f) => f.id === section.id)?.name ?? 'Folder';
@@ -264,6 +322,15 @@ export function Library({
         <button className="icon-btn" onClick={() => setShowSettings(true)} aria-label="Settings" title="Settings">
           <SettingsIcon size={20} />
         </button>
+        {account ? (
+          <AccountMenu account={account} />
+        ) : (
+          cloudEnabled && (
+            <button className="btn btn-sm btn-signin" onClick={requestSignIn} title="Sign in to share documents">
+              <LogIn size={16} /> <span className="hide-mobile">Sign in</span>
+            </button>
+          )
+        )}
       </header>
 
       <div className="lib-body">
@@ -278,6 +345,7 @@ export function Library({
           <nav>
             {navItem({ kind: 'recent' }, 'All documents', <Clock size={18} />)}
             {navItem({ kind: 'starred' }, 'Starred', <Star size={18} />)}
+            {cloudEnabled && navItem({ kind: 'shared' }, 'Shared', <Users size={18} />)}
             {navItem({ kind: 'trash' }, 'Trash', <Trash2 size={18} />, docs?.filter((d) => d.trashed).length)}
           </nav>
           <div className="nav-heading">
@@ -335,7 +403,7 @@ export function Library({
         </aside>
 
         <main className="lib-main">
-          {section.kind !== 'trash' && !query && (
+          {section.kind !== 'trash' && section.kind !== 'shared' && !query && (
             <section className="templates">
               <div className="section-head">
                 <h2>Start a new document</h2>
@@ -385,7 +453,25 @@ export function Library({
               </div>
             </div>
 
-            {docs && visible.length === 0 && (
+            {section.kind === 'shared' &&
+              (account ? (
+                <>
+                  <button className="btn btn-sm open-link-btn" onClick={openLink}>
+                    <Link2 size={15} /> Open a shared link…
+                  </button>
+                  <SharedList docs={cloudDocs} error={cloudError} query={query} layout={layout} onOpen={openCloudDoc} />
+                </>
+              ) : (
+                <div className="empty">
+                  <Users size={40} />
+                  <p>Sign in to share your documents and to see documents other people share with you. Your own documents stay on this device.</p>
+                  <button className="btn btn-primary" onClick={requestSignIn}>
+                    <LogIn size={16} /> Sign in
+                  </button>
+                </div>
+              ))}
+
+            {section.kind !== 'shared' && docs && visible.length === 0 && (
               <div className="empty">
                 <FileText size={40} />
                 <p>
@@ -401,7 +487,7 @@ export function Library({
             )}
 
             <div className={layout === 'grid' ? 'doc-grid' : 'doc-list'}>
-              {visible.map((doc) => (
+              {(section.kind === 'shared' ? [] : visible).map((doc) => (
                 <div
                   key={doc.id}
                   className="doc-card"
@@ -416,11 +502,16 @@ export function Library({
                     </div>
                   )}
                   <div className="doc-meta">
-                    <FileText size={18} className="doc-icon" />
+                    {doc.cloudId ? (
+                      <Users size={18} className="doc-icon" aria-label="Shared" />
+                    ) : (
+                      <FileText size={18} className="doc-icon" />
+                    )}
                     <div className="doc-text">
                       <span className="doc-title">{doc.title}</span>
                       <span className="doc-date">
-                        {doc.starred && <Star size={12} className="star-fill" />} Edited {relativeTime(doc.updatedAt)}
+                        {doc.starred && <Star size={12} className="star-fill" />}
+                        {doc.sharedBy ? `Shared by ${doc.sharedBy}` : `Edited ${relativeTime(doc.updatedAt)}`}
                         {layout === 'list' && doc.wordCount > 0 && ` · ${doc.wordCount.toLocaleString()} words`}
                       </span>
                     </div>
@@ -488,4 +579,75 @@ function localStorageGet(key: string) {
   } catch {
     return null;
   }
+}
+
+function AccountMenu({ account }: { account: Account }) {
+  const email = account.user.email;
+  return (
+    <Menu
+      align="right"
+      trigger={({ toggle }) => (
+        <button className="account-btn" onClick={toggle} aria-label={`Account: ${email}`} title={email}>
+          {email.slice(0, 1).toUpperCase()}
+        </button>
+      )}
+      items={[
+        { render: () => <div className="account-email">Signed in as<br /><strong>{email}</strong></div> },
+        { divider: true },
+        { label: 'Sign out', icon: <LogOut size={16} />, onClick: account.signOut },
+      ]}
+    />
+  );
+}
+
+function SharedList({
+  docs,
+  error,
+  query,
+  layout,
+  onOpen,
+}: {
+  docs: CloudDocSummary[] | null;
+  error: string | null;
+  query: string;
+  layout: 'grid' | 'list';
+  onOpen: (cloudId: string) => void;
+}) {
+  if (error) return <div className="empty"><p>{error}</p></div>;
+  if (!docs) return <div className="empty"><p className="muted">Loading shared documents…</p></div>;
+  const q = query.trim().toLowerCase();
+  const list = q ? docs.filter((d) => d.title.toLowerCase().includes(q) || d.preview.toLowerCase().includes(q)) : docs;
+  if (!list.length)
+    return (
+      <div className="empty">
+        <Users size={40} />
+        <p>
+          {q
+            ? 'No shared documents match your search.'
+            : 'Documents you share, and documents other people share with you, appear here. Open a document and click Share to invite someone.'}
+        </p>
+      </div>
+    );
+  return (
+    <div className={layout === 'grid' ? 'doc-grid' : 'doc-list'}>
+      {list.map((d) => (
+        <div key={d.id} className="doc-card" role="button" tabIndex={0} onClick={() => onOpen(d.id)} onKeyDown={(e) => e.key === 'Enter' && onOpen(d.id)}>
+          {layout === 'grid' && (
+            <div className="doc-thumb">
+              <p>{d.preview || <span className="muted">Empty document</span>}</p>
+            </div>
+          )}
+          <div className="doc-meta">
+            <Users size={18} className="doc-icon" />
+            <div className="doc-text">
+              <span className="doc-title">{d.title}</span>
+              <span className="doc-date">
+                {d.role === 'owner' ? 'Owned by you' : `Shared by ${d.owner_email}`} · {d.role === 'view' ? 'Can view' : 'Can edit'}
+              </span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }

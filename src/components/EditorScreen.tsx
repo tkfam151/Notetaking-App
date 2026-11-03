@@ -13,6 +13,11 @@ import {
   Check,
   Loader2,
   Maximize2,
+  Eye,
+  Cloud,
+  CloudOff,
+  Users,
+  UserPlus,
 } from 'lucide-react';
 import { buildExtensions } from '../editor/extensions';
 import { addVersion, getDoc, saveDoc, uid, duplicateDoc } from '../lib/db';
@@ -33,6 +38,10 @@ import { parseDrawing, type DrawingData } from '../editor/Drawing';
 import { NodeSelection } from '@tiptap/pm/state';
 import { Ruler } from './Ruler';
 import { SettingsDialog } from './SettingsDialog';
+import { ShareDialog } from './ShareDialog';
+import { requestSignIn, type Account } from '../App';
+import { cloud, cloudEnabled, parseShareLink, type CloudRole } from '../lib/cloud';
+import { detachFromCloud, fromCloud } from '../lib/sharing';
 
 const DPI = 96;
 const SNAPSHOT_EVERY_MS = 10 * 60 * 1000;
@@ -43,6 +52,8 @@ interface Props {
   updateSettings: (p: Partial<Settings>) => void;
   onHome: () => void;
   onOpen: (id: string) => void;
+  /** Web with accounts only: enables sharing */
+  account: Account | null;
 }
 
 export function EditorScreen(props: Props) {
@@ -105,7 +116,7 @@ function useIsNarrow() {
   return narrow;
 }
 
-function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Props & { initial: InkDoc }) {
+function EditorInner({ initial, settings, updateSettings, onHome, onOpen, account }: Props & { initial: InkDoc }) {
   const ui = useUI();
   const narrow = useIsNarrow();
 
@@ -122,6 +133,17 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
   const dirtySinceSnapshot = useRef(false);
   const editorRef = useRef<Editor | null>(null);
   const previewing = useRef(false);
+
+  // ---- Sharing (web with accounts only) --------------------------------------
+  const sharing = !!account;
+  const [cloudRole, setCloudRole] = useState<CloudRole | null>(sharing && initial.cloudId ? initial.cloudRole ?? null : null);
+  const [sync, setSync] = useState<'idle' | 'syncing' | 'synced' | 'offline'>('idle');
+  const [shareOpen, setShareOpen] = useState(false);
+  const readOnly = cloudRole === 'view';
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
+  const pushTimer = useRef<number | undefined>(undefined);
+  const pushing = useRef(false);
 
   // ---- UI state -----------------------------------------------------------
   const [panel, setPanel] = useState<'comments' | 'history' | null>(() =>
@@ -146,6 +168,10 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
     const editor = editorRef.current;
     if (!editor || previewing.current) return;
     window.clearTimeout(saveTimer.current);
+    if (readOnlyRef.current) {
+      setStatus('saved');
+      return;
+    }
     const text = editor.getText({ blockSeparator: '\n' });
     const next: InkDoc = {
       ...docRef.current,
@@ -154,8 +180,10 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
       wordCount: editor.storage.characterCount.words(),
       updatedAt: Date.now(),
     };
+    if (next.cloudId && next.cloudRole && next.cloudRole !== 'view') next.cloudDirty = true;
     docRef.current = next;
     await saveDoc(next);
+    if (next.cloudDirty) schedulePushRef.current();
     if (dirtySinceSnapshot.current && Date.now() - lastSnapshot.current > SNAPSHOT_EVERY_MS) {
       await addVersion(next);
       lastSnapshot.current = Date.now();
@@ -178,13 +206,148 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
   // Keep metadata on the doc ref and save when it changes
   const firstMeta = useRef(true);
   useEffect(() => {
-    docRef.current = { ...docRef.current, title: title.trim() || 'Untitled document', starred, pageSetup, comments };
+    const d = docRef.current;
+    const t = title.trim() || 'Untitled document';
+    const changed = d.title !== t || d.starred !== starred || d.pageSetup !== pageSetup || d.comments !== comments;
+    docRef.current = { ...d, title: t, starred, pageSetup, comments };
     if (firstMeta.current) {
       firstMeta.current = false;
       return;
     }
-    scheduleSave();
+    if (changed) scheduleSave();
   }, [title, starred, pageSetup, comments, scheduleSave]);
+
+  // ---- Cloud sync for shared documents -----------------------------------------
+  /** Upload local changes to the shared copy. */
+  const push = useCallback(async () => {
+    const d = docRef.current;
+    if (!account || !d.cloudId || !d.cloudDirty || d.cloudRole === 'view' || pushing.current) return;
+    pushing.current = true;
+    setSync('syncing');
+    try {
+      const api = await cloud();
+      const ts = await api.saveDoc(d.cloudId, {
+        title: d.title,
+        content: d.content,
+        page_setup: d.pageSetup,
+        comments: d.comments,
+        preview: d.preview,
+        word_count: d.wordCount,
+      });
+      // Only clear the flag if nothing changed while uploading
+      const same = docRef.current.content === d.content && docRef.current.title === d.title && docRef.current.comments === d.comments;
+      docRef.current = { ...docRef.current, cloudUpdatedAt: ts, cloudDirty: !same };
+      await saveDoc(docRef.current);
+      setSync('synced');
+      if (!same) schedulePushRef.current();
+    } catch (e) {
+      setSync('offline');
+      if (/permission/i.test(String(e))) {
+        // Access was downgraded: refresh role on next pull
+        docRef.current = { ...docRef.current, cloudDirty: false };
+        pullRef.current();
+      }
+    } finally {
+      pushing.current = false;
+    }
+  }, [account]);
+
+  const schedulePushRef = useRef<() => void>(() => {});
+  schedulePushRef.current = () => {
+    window.clearTimeout(pushTimer.current);
+    pushTimer.current = window.setTimeout(push, 1200);
+  };
+
+  /** Download changes other people made (or detach if access was removed). */
+  const pull = useCallback(async () => {
+    const ed = editorRef.current;
+    const d = docRef.current;
+    if (!account || !ed || !d.cloudId || previewing.current) return;
+    if (d.cloudDirty) {
+      push();
+      return;
+    }
+    try {
+      const api = await cloud();
+      const st = await api.status(d.cloudId);
+      if (st && st.updated_at === d.cloudUpdatedAt && st.role === d.cloudRole) {
+        setSync('synced');
+        return;
+      }
+      const remote = await api.openDoc(d.cloudId);
+      if (!remote) {
+        docRef.current = detachFromCloud(docRef.current);
+        await saveDoc(docRef.current);
+        setCloudRole(null);
+        ed.setEditable(true);
+        ui.toast('You no longer have access to the shared version. This is now your private copy.');
+        return;
+      }
+      setCloudRole(remote.role);
+      if (remote.updated_at !== d.cloudUpdatedAt && !docRef.current.cloudDirty && status === 'saved') {
+        const incoming = fromCloud(remote);
+        docRef.current = { ...docRef.current, ...incoming, updatedAt: Date.now() };
+        replaceDocContent(ed, remote.content);
+        setTitle(docRef.current.title);
+        setPageSetup(docRef.current.pageSetup);
+        setComments(docRef.current.comments);
+        await saveDoc(docRef.current);
+        if (d.cloudUpdatedAt && remote.updated_by_email && remote.updated_by_email !== account.user.email) {
+          ui.toast(`Updated with changes from ${remote.updated_by_email}`);
+        }
+      } else {
+        docRef.current = { ...docRef.current, cloudRole: remote.role };
+        await saveDoc(docRef.current);
+      }
+      setSync('synced');
+    } catch {
+      setSync('offline');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, push, status]);
+  const pullRef = useRef(pull);
+  pullRef.current = pull;
+
+  // Check for other people's changes when opening, when returning to the tab, and every 15s.
+  const linked = !!cloudRole;
+  useEffect(() => {
+    if (!account || !linked) return;
+    pullRef.current();
+    const onFocus = () => document.visibilityState === 'visible' && pullRef.current();
+    const timer = window.setInterval(onFocus, 15_000);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onFocus);
+      window.clearTimeout(pushTimer.current);
+      // Last chance to upload pending changes
+      if (docRef.current.cloudDirty) push();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [account, linked]);
+
+  /** First time the owner shares: upload the document and link it. */
+  const ensureShared = useCallback(async () => {
+    if (docRef.current.cloudId) return docRef.current.cloudId;
+    await persist();
+    const d = docRef.current;
+    const api = await cloud();
+    const remote = await api.createDoc({
+      title: d.title,
+      content: d.content,
+      page_setup: d.pageSetup,
+      comments: d.comments,
+      preview: d.preview,
+      word_count: d.wordCount,
+    });
+    docRef.current = { ...docRef.current, cloudId: remote.id, cloudRole: 'owner', cloudUpdatedAt: remote.updated_at, cloudDirty: false };
+    await saveDoc(docRef.current);
+    setCloudRole('owner');
+    setSync('synced');
+    return remote.id;
+  }, [persist]);
 
   useEffect(() => {
     document.title = `${title || 'Untitled'} – Inkwell`;
@@ -206,6 +369,7 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
   const editor = useEditor({
     extensions,
     content: initial.content as any,
+    editable: !(sharing && initial.cloudId && initial.cloudRole === 'view'),
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
@@ -237,6 +401,10 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
     },
   });
   editorRef.current = editor;
+
+  useEffect(() => {
+    if (!previewing.current) editor.setEditable(!readOnly);
+  }, [editor, readOnly]);
 
   useEffect(() => {
     editor.view.dom.setAttribute('spellcheck', String(settings.spellcheck));
@@ -374,6 +542,10 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
   }, [editor, ui]);
 
   const addComment = useCallback(() => {
+    if (readOnlyRef.current) {
+      ui.toast('You can only view this document');
+      return;
+    }
     const { from, to } = editor.state.selection;
     if (from === to) {
       ui.toast('Select some text to comment on');
@@ -402,7 +574,7 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
       } else if (previewing.current) {
         replaceDocContent(editor, docRef.current.content);
         previewing.current = false;
-        editor.setEditable(true);
+        editor.setEditable(!readOnlyRef.current);
       }
       setPreview(v);
     },
@@ -410,10 +582,10 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
   );
 
   const restoreVersion = useCallback(async () => {
-    if (!preview) return;
+    if (!preview || readOnlyRef.current) return;
     await addVersion(docRef.current, 'Before restoring an earlier version');
     previewing.current = false;
-    editor.setEditable(true);
+    editor.setEditable(!readOnlyRef.current);
     editor.commands.setContent(preview.content as any, { emitUpdate: true });
     setPreview(null);
     await persist();
@@ -512,6 +684,20 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
         },
         { label: 'Open…', shortcut: '', onClick: onHome },
         { label: 'Import file…', onClick: importNew },
+        ...(cloudEnabled
+          ? [
+              {
+                label: 'Open shared link…',
+                onClick: async () => {
+                  const text = await ui.prompt('Open a shared link', '', { label: 'Paste the link someone sent you', ok: 'Open' });
+                  if (text === null) return;
+                  const id = parseShareLink(text);
+                  if (!id) ui.toast('That doesn’t look like an Inkwell share link');
+                  else location.hash = `#/shared/${id}`;
+                },
+              },
+            ]
+          : []),
         {
           label: 'Make a copy',
           onClick: async () => {
@@ -716,6 +902,8 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
     },
   ];
 
+  // Viewers only get menus that don't change the document
+  const visibleMenus = readOnly ? menus.filter((mn) => ['file', 'view', 'tools'].includes(mn.id)) : menus;
   const openComments = comments.filter((x) => !x.resolved && x.text).length;
 
   return (
@@ -731,6 +919,7 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
               className="ed-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              readOnly={readOnly}
               onKeyDown={(e) => e.key === 'Enter' && editor.commands.focus()}
               onBlur={() => !title.trim() && setTitle('Untitled document')}
               aria-label="Document title"
@@ -745,7 +934,23 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
               <Star size={16} />
             </button>
             <span className="save-status" aria-live="polite">
-              {status === 'saved' ? (
+              {readOnly ? (
+                <>
+                  <Eye size={14} /> View only
+                </>
+              ) : cloudRole && sync === 'offline' ? (
+                <>
+                  <CloudOff size={14} /> Saved on this device · will sync when online
+                </>
+              ) : cloudRole && (sync === 'syncing' || status !== 'saved') ? (
+                <>
+                  <Loader2 size={14} className="spin" /> Syncing…
+                </>
+              ) : cloudRole ? (
+                <>
+                  <Cloud size={14} /> Saved and shared
+                </>
+              ) : status === 'saved' ? (
                 <>
                   <Check size={14} /> Saved
                 </>
@@ -757,7 +962,7 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
             </span>
           </div>
           <nav className="menubar hide-mobile" aria-label="Menu">
-            {menus.map((mn) => (
+            {visibleMenus.map((mn) => (
               <Menu
                 key={mn.id}
                 id={mn.id}
@@ -790,6 +995,16 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
           >
             <History size={20} />
           </button>
+          {cloudEnabled && (
+            <button
+              className="btn btn-share"
+              onClick={() => (account ? setShareOpen(true) : requestSignIn())}
+              title={account ? 'Share with other people' : 'Sign in to share'}
+            >
+              {cloudRole ? <Users size={16} /> : <UserPlus size={16} />}
+              <span className="hide-mobile">Share</span>
+            </button>
+          )}
           <Menu
             align="right"
             trigger={({ toggle }) => (
@@ -809,7 +1024,7 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
                 <MoreVertical size={20} />
               </button>
             )}
-            items={() => menus.map((mn) => ({ label: mn.label, submenu: mn.items() }))}
+            items={() => visibleMenus.map((mn) => ({ label: mn.label, submenu: mn.items() }))}
           />
         </div>
       </header>
@@ -828,6 +1043,13 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
               Restore this version
             </button>
           </div>
+        </div>
+      ) : readOnly ? (
+        <div className="preview-banner view-only-banner">
+          <span>
+            <Eye size={16} /> <strong>View only.</strong> Shared with you by {docRef.current.sharedBy ?? 'the owner'}. Ask them for
+            edit access to make changes.
+          </span>
         </div>
       ) : (
         <Toolbar
@@ -910,6 +1132,17 @@ function EditorInner({ initial, settings, updateSettings, onHome, onOpen }: Prop
       {!preview && <TableBubble editor={editor} />}
       {!preview && <LinkBubble editor={editor} onEdit={editLink} />}
       {!preview && <DrawingBubble editor={editor} onEdit={openDrawing} />}
+      {shareOpen && account && (
+        <ShareDialog
+          title={title}
+          me={account.user.email}
+          cloudId={docRef.current.cloudId ?? null}
+          role={cloudRole ?? 'owner'}
+          sharedBy={docRef.current.sharedBy}
+          ensureShared={ensureShared}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
       {drawing && <DrawingDialog initial={drawing.data} onSave={saveDrawing} onClose={() => setDrawing(null)} />}
 
       {dialog === 'pageSetup' && <PageSetupDialog value={pageSetup} onSave={setPageSetup} onClose={() => setDialog(null)} />}

@@ -17,6 +17,8 @@ on:
 permissions:
   contents: write
 
+# Sign-in and sharing settings (optional in the apps) come from .env.production.
+
 jobs:
   desktop:
     name: Desktop (${{ matrix.name }})

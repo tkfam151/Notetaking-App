@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/react';
 import {
   AlignCenter,
@@ -181,6 +181,51 @@ function TablePicker({ onPick, close }: { onPick: (r: number, c: number) => void
   );
 }
 
+/**
+ * The font size box. It keeps what you type while it has focus (the toolbar re-renders
+ * constantly as the cursor moves), and applies it on Enter or when you click away.
+ */
+function FontSizeBox({ size, onApply }: { size: number; onApply: (n: number) => void }) {
+  const [value, setValue] = useState(String(size));
+  const editing = useRef(false);
+  useEffect(() => {
+    if (!editing.current) setValue(String(size));
+  }, [size]);
+  const apply = () => {
+    const n = parseFloat(value);
+    if (n > 0 && n !== size) onApply(n);
+    else setValue(String(size));
+  };
+  return (
+    <input
+      className="tb-size"
+      value={value}
+      aria-label="Font size"
+      title="Font size"
+      inputMode="numeric"
+      list="inkwell-font-sizes"
+      onFocus={() => (editing.current = true)}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          editing.current = false;
+          apply();
+        } else if (e.key === 'Escape') {
+          editing.current = false;
+          setValue(String(size));
+        }
+      }}
+      onBlur={() => {
+        if (editing.current) {
+          editing.current = false;
+          apply();
+        }
+      }}
+    />
+  );
+}
+
 export function Toolbar({ editor, actions }: { editor: Editor; actions: ToolbarActions }) {
   useEditorTick(editor);
   const c = () => editor.chain().focus();
@@ -274,26 +319,7 @@ export function Toolbar({ editor, actions }: { editor: Editor; actions: ToolbarA
       <Btn title="Decrease font size" onClick={() => setSize([...FONT_SIZES].reverse().find((s) => s < size) ?? size - 1)}>
         <Minus size={15} />
       </Btn>
-      <input
-        className="tb-size"
-        key={size}
-        defaultValue={size}
-        aria-label="Font size"
-        title="Font size"
-        inputMode="numeric"
-        list="inkwell-font-sizes"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            const n = parseFloat((e.target as HTMLInputElement).value);
-            if (n > 0) setSize(n);
-          }
-        }}
-        onBlur={(e) => {
-          const n = parseFloat(e.target.value);
-          if (n > 0 && n !== size) setSize(n);
-        }}
-      />
+      <FontSizeBox size={size} onApply={setSize} />
       <datalist id="inkwell-font-sizes">
         {FONT_SIZES.map((s) => (
           <option key={s} value={s} />

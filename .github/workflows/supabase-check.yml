@@ -1,0 +1,14 @@
+# Checks the Supabase project used for sign-in and sharing (uses only the public key).
+name: Check Supabase setup
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.env.production', 'supabase/**', 'scripts/check-supabase.sh', '.github/workflows/supabase-check.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/check-supabase.sh
