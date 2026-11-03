@@ -17,11 +17,6 @@ on:
 permissions:
   contents: write
 
-# One release build at a time; a newer push replaces a queued older one.
-concurrency:
-  group: release
-  cancel-in-progress: false
-
 # Sign-in and sharing settings (optional in the apps) come from .env.production.
 
 jobs:
@@ -31,7 +26,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: macOS, os: macos-15, script: dist:mac, files: 'release/*.dmg' }
+          # Built on Linux so it never waits for a Mac runner. Unsigned: the README's
+          # one-line Terminal command signs it on the user's Mac.
+          - { name: macOS, os: ubuntu-latest, script: dist:mac-zip, files: 'release/*-mac-*.zip' }
           - { name: Windows, os: windows-latest, script: dist:win, files: 'release/*.exe' }
           - { name: Linux, os: ubuntu-latest, script: dist:linux, files: "release/*.AppImage\nrelease/*.deb" }
     runs-on: ${{ matrix.os }}
@@ -86,9 +83,37 @@ jobs:
           path: out/*.apk
           if-no-files-found: error
 
-  ios:
-    name: iOS (unsigned IPA)
+  # The .dmg and iOS builds need a GitHub Mac runner, which can be unavailable for a
+  # long time (or out of free minutes). They run AFTER the release is published and add
+  # their files to it when they finish, so they never hold up the other platforms.
+  mac-dmg:
+    name: macOS (.dmg, needs a Mac runner)
+    needs: release
     runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: ver
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          files: release/*.dmg
+
+  ios:
+    name: iOS (unsigned IPA, needs a Mac runner)
+    needs: release
+    runs-on: macos-15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -109,11 +134,12 @@ jobs:
           mkdir -p out/Payload
           cp -R ios/build/Build/Products/Release-iphoneos/App.app out/Payload/
           (cd out && zip -qry "Inkwell-${VERSION}-ios-unsigned.ipa" Payload && rm -rf Payload)
-      - uses: actions/upload-artifact@v4
+      - id: ver
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
         with:
-          name: inkwell-iOS
-          path: out/*.ipa
-          if-no-files-found: error
+          tag_name: ${{ steps.ver.outputs.tag }}
+          files: out/*.ipa
 
   web:
     name: Web app (zip)
@@ -138,7 +164,7 @@ jobs:
     name: Publish GitHub Release
     # Publish even if one platform fails, so the others are still downloadable.
     if: always()
-    needs: [desktop, android, ios, web]
+    needs: [desktop, android, web]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -163,7 +189,9 @@ jobs:
             ## Download Inkwell
             | Platform | File |
             |---|---|
-            | **macOS** (Intel & Apple Silicon) | `Inkwell-*-mac.dmg` |
+            | **Mac with Apple Silicon** (M1 or newer) | `Inkwell-*-mac-arm64.zip` |
+            | **Mac with Intel** | `Inkwell-*-mac-x64.zip` |
+            | Mac installer (when a Mac build machine was available) | `Inkwell-*-mac.dmg` |
             | **Windows** 10/11 | `Inkwell-*-windows-setup.exe` |
             | **Linux** | `.AppImage` or `.deb` |
             | **Android** | `Inkwell-*-android.apk` |

@@ -31,7 +31,8 @@ All installers are on the **[Releases page](https://github.com/tkfam151/notetaki
 
 | Your device | File to download |
 |---|---|
-| 🍎 **Mac** (Intel or Apple Silicon) | `Inkwell-x.y.z-mac.dmg` |
+| 🍎 **Mac with Apple Silicon** (M1, M2, M3, M4…) | `Inkwell-x.y.z-mac-arm64.zip` |
+| 🍎 **Mac with Intel** | `Inkwell-x.y.z-mac-x64.zip` |
 | 🪟 **Windows** 10 / 11 | `Inkwell-x.y.z-windows-setup.exe` |
 | 🐧 **Linux** | `Inkwell-x.y.z-linux-x86_64.AppImage` or `.deb` |
 | 🤖 **Android** phone or tablet | `Inkwell-x.y.z-android.apk` |
@@ -42,20 +43,17 @@ All installers are on the **[Releases page](https://github.com/tkfam151/notetaki
 
 ### 🍎 Mac
 
-1. Download **`Inkwell-…-mac.dmg`** and double-click it.
-2. Drag **Inkwell** into your **Applications** folder.
-3. Open **Applications** and **right-click → Open** on Inkwell, then click **Open** again.
-   - On macOS 15 (Sequoia) or later: if it says the app can't be opened, go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to Inkwell.
-   - If it says the app is **"damaged"**, open **Terminal** and run the command below, then open the app again:
-     ```bash
-     xattr -cr /Applications/Inkwell.app
-     ```
-   - If it still won't open (common on Apple Silicon Macs), this copies the app into your
-     user Applications folder without the download quarantine, re-signs it locally and opens it:
-     ```bash
-     pkill -9 -f "Inkwell"; mkdir -p ~/Applications; rm -rf ~/Applications/Inkwell.app; ditto --noextattr --noqtn /Applications/Inkwell.app ~/Applications/Inkwell.app && codesign --force --deep --sign - ~/Applications/Inkwell.app && open ~/Applications/Inkwell.app
-     ```
-     From then on, open Inkwell from the **Applications** folder inside your home folder.
+Not sure which Mac you have? Click the Apple menu  → **About This Mac**. If **Chip** says *Apple M1/M2/M3/M4*, download **`-mac-arm64.zip`**. If it says **Processor … Intel**, download **`-mac-x64.zip`**.
+
+1. Download the `.zip` and double-click it. You get **Inkwell.app**.
+2. Drag **Inkwell.app** into your **Applications** folder.
+3. Open **Terminal** (press ⌘+Space and type *Terminal*), paste this line and press Return:
+   ```bash
+   pkill -9 -f "Inkwell"; mkdir -p ~/Applications; rm -rf ~/Applications/Inkwell.app; ditto --noextattr --noqtn /Applications/Inkwell.app ~/Applications/Inkwell.app && codesign --force --deep --sign - ~/Applications/Inkwell.app && open ~/Applications/Inkwell.app
+   ```
+   This copies the app to the **Applications** folder inside your home folder, removes the "downloaded from the internet" block, signs it for your Mac and opens it. From then on, open Inkwell from there. Run the line again after installing a new version.
+
+*(When GitHub has a Mac build machine available, the release also includes a `-mac.dmg` installer. It installs the same app, and needs the same Terminal line.)*
 
 ### 🪟 Windows
 
@@ -195,6 +193,7 @@ npm run dev          # opens the web app at http://localhost:5173
 ```bash
 npm run electron:dev   # run the desktop app
 npm run dist:mac       # → release/Inkwell-x.y.z-mac.dmg        (must run on a Mac)
+npm run dist:mac-zip   # → release/Inkwell-x.y.z-mac-arm64.zip and -x64.zip (works on any OS)
 npm run dist:win       # → release/Inkwell-x.y.z-windows-setup.exe
 npm run dist:linux     # → release/Inkwell-x.y.z-linux-x86_64.AppImage and .deb
 ```
