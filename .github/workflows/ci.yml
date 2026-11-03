@@ -26,3 +26,30 @@ jobs:
           npx vite preview --port 4173 --strictPort &
           for i in $(seq 1 30); do curl -sf http://localhost:4173 >/dev/null && break; sleep 1; done
           npm test
+      - name: Sharing test (accounts, invites, links, view-only)
+        run: |
+          VITE_CLOUD=fake npx vite build --outDir dist-cloudtest
+          npx vite preview --outDir dist-cloudtest --port 4174 --strictPort &
+          for i in $(seq 1 30); do curl -sf http://localhost:4174 >/dev/null && break; sleep 1; done
+          node scripts/cloud-test.mjs
+
+  database:
+    name: Database security rules
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run row-level-security tests
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -q \
+            -f supabase/tests/auth-stub.sql -f supabase/schema.sql -f supabase/tests/rls.test.sql 2>&1 | tee out.txt
+          grep -q "ALL RLS TESTS PASSED" out.txt

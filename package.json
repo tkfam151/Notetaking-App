@@ -2,7 +2,7 @@
   "name": "inkwell",
   "productName": "Inkwell",
   "version": "1.1.0",
-  "description": "Inkwell — a beautiful, offline-first word processor for Mac, Windows, Linux, iOS, Android and the web.",
+  "description": "Inkwell \u2014 a beautiful, offline-first word processor for Mac, Windows, Linux, iOS, Android and the web.",
   "author": "Inkwell",
   "private": true,
   "type": "module",
@@ -20,7 +20,8 @@
     "dist:linux": "npm run build && electron-builder --linux --publish never",
     "cap:sync": "npm run build && cap sync",
     "android:open": "npm run cap:sync && cap open android",
-    "ios:open": "npm run cap:sync && cap open ios"
+    "ios:open": "npm run cap:sync && cap open ios",
+    "test:cloud": "node scripts/cloud-test.mjs"
   },
   "build": {
     "appId": "app.inkwell.editor",
@@ -97,6 +98,7 @@
     "@fontsource/merriweather": "^5.3.0",
     "@fontsource/playfair-display": "^5.3.0",
     "@fontsource/roboto-mono": "^5.3.0",
+    "@supabase/supabase-js": "^2.118.0",
     "@tiptap/extension-highlight": "^3.32.2",
     "@tiptap/extension-image": "^3.32.2",
     "@tiptap/extension-list": "^3.32.2",

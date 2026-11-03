@@ -20,21 +20,66 @@ interface InkwellDB extends DBSchema {
 }
 
 let dbPromise: Promise<IDBPDatabase<InkwellDB>> | null = null;
+const DEFAULT_DB = 'inkwell';
+let dbName = DEFAULT_DB;
+
+function open(name: string) {
+  return openDB<InkwellDB>(name, 1, {
+    upgrade(d) {
+      const docs = d.createObjectStore('docs', { keyPath: 'id' });
+      docs.createIndex('updatedAt', 'updatedAt');
+      const versions = d.createObjectStore('versions', { keyPath: 'id' });
+      versions.createIndex('docId', 'docId');
+      d.createObjectStore('folders', { keyPath: 'id' });
+      d.createObjectStore('settings');
+    },
+  });
+}
 
 function db() {
-  if (!dbPromise) {
-    dbPromise = openDB<InkwellDB>('inkwell', 1, {
-      upgrade(d) {
-        const docs = d.createObjectStore('docs', { keyPath: 'id' });
-        docs.createIndex('updatedAt', 'updatedAt');
-        const versions = d.createObjectStore('versions', { keyPath: 'id' });
-        versions.createIndex('docId', 'docId');
-        d.createObjectStore('folders', { keyPath: 'id' });
-        d.createObjectStore('settings');
-      },
-    });
-  }
+  if (!dbPromise) dbPromise = open(dbName);
   return dbPromise;
+}
+
+/**
+ * Web with accounts: keep each signed-in user's documents in their own on-device database,
+ * so people sharing a browser don't see each other's files. The desktop and mobile apps
+ * never call this and keep using the default database.
+ */
+export async function selectAccountStorage(userId: string) {
+  const name = `${DEFAULT_DB}-${userId}`;
+  if (name === dbName) return;
+  if (dbPromise) (await dbPromise).close();
+  dbName = name;
+  dbPromise = null;
+  // One-time: documents created on this website before accounts existed move into the
+  // first account that signs in here.
+  const legacy = await open(DEFAULT_DB);
+  try {
+    const claimed = await legacy.get('settings', 'claimedBy');
+    if (!claimed) {
+      const [docs, folders, versions, settings] = await Promise.all([
+        legacy.getAll('docs'),
+        legacy.getAll('folders'),
+        legacy.getAll('versions'),
+        legacy.get('settings', 'app'),
+      ]);
+      const target = await db();
+      const tx = target.transaction(['docs', 'folders', 'versions', 'settings'], 'readwrite');
+      for (const d of docs) await tx.objectStore('docs').put(d);
+      for (const f of folders) await tx.objectStore('folders').put(f);
+      for (const v of versions) await tx.objectStore('versions').put(v);
+      if (settings && !(await tx.objectStore('settings').get('app'))) await tx.objectStore('settings').put(settings, 'app');
+      await tx.done;
+      await legacy.put('settings', { claimedBy: userId } as unknown as Settings, 'claimedBy');
+    }
+  } finally {
+    legacy.close();
+  }
+}
+
+export async function findByCloudId(cloudId: string) {
+  return (await (await db()).getAll('docs')).find((d) => d.cloudId === cloudId);
 }
 
 export const uid = () =>

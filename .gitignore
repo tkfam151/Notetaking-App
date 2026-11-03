@@ -12,3 +12,4 @@ ios/App/build/
 ios/App/Pods/
 ios/DerivedData/
 *.tsbuildinfo
+dist-cloudtest/

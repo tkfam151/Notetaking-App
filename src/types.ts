@@ -42,6 +42,16 @@ export interface InkDoc {
   pageSetup: PageSetup;
   comments: DocComment[];
   wordCount: number;
+  /** Web only: id of the shared copy in the cloud, when this document is shared */
+  cloudId?: string;
+  /** Web only: my access to the shared copy */
+  cloudRole?: 'owner' | 'edit' | 'view';
+  /** Web only: cloud updated_at of the version this copy is based on */
+  cloudUpdatedAt?: string;
+  /** Web only: true when local changes have not been uploaded yet */
+  cloudDirty?: boolean;
+  /** Web only: email of the person who shared it with me */
+  sharedBy?: string;
 }
 
 export interface Folder {
