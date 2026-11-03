@@ -239,6 +239,7 @@ scripts/             Icon generator and the end-to-end smoke test
 GitHub builds every installer automatically. You don't need a Mac or Windows PC.
 
 1. **One-time setup, for the web app:** in the repository, go to **Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**. The web app then deploys to `https://tkfam151.github.io/notetaking-app/` on every push to `main`.
+   Don't add GitHub's Jekyll workflow: Inkwell is already a built app, and Jekyll would replace it with the README.
 2. **Make a release:** change `"version"` in `package.json` (for example to `1.0.1`), commit, and push to `main`.
    (Pushing a tag such as `v1.0.1` also works.)
 3. Open the **Actions** tab and wait roughly 15–20 minutes. The **Build & Release** workflow builds the macOS, Windows, Linux, Android, iOS and web versions, then creates a **Release** tagged `v1.0.1` with all the files attached. That's the link you share.
